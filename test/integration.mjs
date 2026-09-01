@@ -173,6 +173,40 @@ section('BOARDING');
   }
 }
 
+/* ----------------------------------------------------------------- chase */
+section('CHASE');
+{
+  // a wounded pirate running flat out must be catchable by a starter shuttle
+  player.active = 0;                       // back to the Vex Shuttle
+  player.buildShip(world);
+  const me = player.ship;
+  me.pos = v3(0, 0, 0);
+  me.vel = v3(0, 0, 0);
+
+  const runner = world.spawnPirate();
+  runner.pos = v3(0, 0, -400);
+  runner.vel = v3(0, 0, 0);
+  runner.hull = runner.stats.hullMax * 0.1;
+  runner.target = me;
+  runner.ai.state = 'flee';
+
+  const gap0 = vdist(me.pos, runner.pos);
+  let gap = gap0;
+  for (let i = 0; i < 60 * 60 && gap > 120; i++) {
+    // fly straight at it, full throttle — what a competent pilot would do
+    qlook(me.quat, vnorm(v3(), vsub(v3(), runner.pos, me.pos)));
+    flyShip(me, { pitch: 0, yaw: 0, roll: 0, throttle: 1 }, 1 / 60);
+    world.update(1 / 60);
+    if (runner.dead) break;
+    gap = vdist(me.pos, runner.pos);
+  }
+  ok('a fleeing pirate can be run down', gap < 120 || runner.dead,
+    `gap ${Math.round(gap0)}m -> ${Math.round(gap)}m`);
+  ok('player hulls keep their full rating',
+    me.stats.maxSpeed > runner.stats.maxSpeed,
+    `${Math.round(me.stats.maxSpeed)} vs ${Math.round(runner.stats.maxSpeed)} m/s`);
+}
+
 /* ------------------------------------------------------------ simulation */
 section('SOAK');
 {

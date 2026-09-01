@@ -69,7 +69,9 @@ manual button).
 - **Mine.** Fit a mining laser and cut rocks apart. Ore trickles straight into the
   hold while you cut; a rock that breaks scatters cargo pods and smaller rocks. Ore
   type is visible in the colour of the wireframe.
-- **Fight.** Pirates hunt the belt. Shoot a licensed hull and the Authority prices
+- **Fight.** Pirates hunt the belt. Computer-flown hulls are capped at 150 m/s
+  whatever they have fitted, so a runner can always be run down — your own ships
+  keep their full rating, which is part of what you are buying when you upgrade. Shoot a licensed hull and the Authority prices
   your head; kill a pirate and you are paid a bounty. The HUD names whoever is
   shooting you and marks their bearing on a ring around the reticle, and hull and
   shield are always on screen as numbers — nothing kills you silently. New pilots

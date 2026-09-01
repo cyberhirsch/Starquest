@@ -10,6 +10,9 @@ import { MODELS } from '../render/models.js';
 
 let NEXT_ID = 1;
 
+/** Ceiling on any computer-flown hull, whatever it has fitted. */
+export const AI_TOP_SPEED = 150;
+
 /** Mount positions, spread over the hull so turret fire visibly converges. */
 function hardpointOffsets(cls) {
   const r = cls.radius;
@@ -110,6 +113,15 @@ export function recalc(ship, refill = false) {
   s.accel = (s.accel * thrustMul) / s.massMul;
   s.turn = (s.turn * turnMul) / Math.sqrt(s.massMul);
   s.maxSpeed = 60 + s.accel * 3.4;
+
+  // Hulls the computer flies are throttled back so a runner can always be run
+  // down. Without this a fleeing Corsair does 271 m/s against a starter
+  // shuttle's 176 and the chase is arithmetically unwinnable. Player-owned
+  // hulls keep their full rating, so buying a fast ship still means something.
+  if (ship.faction !== 'player') {
+    s.maxSpeed = Math.min(s.maxSpeed * 0.72, AI_TOP_SPEED);
+    s.accel *= 0.9;
+  }
   ship.stats = s;
   if (refill) { ship.hull = s.hullMax; ship.shield = s.shieldMax; ship.energy = s.energyMax; }
   ship.hull = Math.min(ship.hull, s.hullMax);
