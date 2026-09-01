@@ -153,12 +153,16 @@ export class UI {
   flashDamage(strength = 0.5) {
     const el = this.el.hitFlash;
     if (!el) return;
+    clearTimeout(this._flashTimer);
+    el.style.display = 'block';
     el.style.transition = 'none';
     el.style.opacity = String(clamp(strength, 0.15, 0.9));
     requestAnimationFrame(() => {
       el.style.transition = 'opacity 0.35s ease-out';
       el.style.opacity = '0';
     });
+    // take it back out of the compositor once it has faded
+    this._flashTimer = setTimeout(() => { el.style.display = 'none'; }, 500);
   }
 
   weaponSignature(ship, player) {
@@ -245,6 +249,12 @@ export class UI {
       case 'assist': player.assist = !player.assist; player.ship.assist = player.assist;
         this.log(`FLIGHT ASSIST ${player.assist ? 'ON' : 'OFF'}`, 'info'); this.render(); return;
       case 'crt': g.toggleCRT(); this.render(); return;
+      case 'flat': {
+        const on = document.body.classList.toggle('flat');
+        try { localStorage.setItem('starquest.flat', on ? '1' : '0'); } catch { /* ignore */ }
+        this.log(`SIMPLE HUD ${on ? 'ON' : 'OFF'}`, 'info');
+        this.render(); return;
+      }
       default: return;
     }
   }
@@ -564,7 +574,14 @@ export class UI {
         ['TAB', 'Inventory and loadout · 1-6 change which mount you man'],
         ['G', 'Flight assist · M this manual'],
       ]).map(([k, v]) => `<div class="item"><span class="grow"><b>${k}</b><span class="sub">${v}</span></span></div>`).join('')}</div></div>
-      <div class="section"><h3>THE BELT</h3><p class="note">
+      <div class="section"><h3>THE BELT</h3>
+      <p class="note">Graphics: <b>${this.game.renderer.backend.toUpperCase()}</b> at
+      ${this.game.renderer.width}×${this.game.renderer.height}
+      (${Math.round((this.game.renderer.resScale || 1) * 100)}% scale)${this.game.fps ? `, ${Math.round(this.game.fps)} fps` : ''}.
+      Seeing black rectangles over the view? Try <b>SIMPLE HUD</b> below, and try loading the game with
+      <b>?gfx=webgl</b> on the end of the address — that forces the fallback renderer and tells us
+      which of the two is at fault.</p>
+      <p class="note">
         You start in a Vex Shuttle with one gun and a mining laser in storage. Fit the laser, cut ore out of
         the rocks, and sell it at Halcyon Depot. Bigger hulls carry more mounts than you have hands —
         buy auto-turrets so the rest of the ship fights while you fly. Ion weapons leave a hull adrift
@@ -575,6 +592,7 @@ export class UI {
       <div class="rowbtns">
         <button class="hbtn" data-do="assist">FLIGHT ASSIST: ${this.game.player.assist ? 'ON' : 'OFF'}</button>
         <button class="hbtn" data-do="crt">CRT FILTER</button>
+        <button class="hbtn" data-do="flat">SIMPLE HUD: ${document.body.classList.contains('flat') ? 'ON' : 'OFF'}</button>
         <button class="hbtn" data-do="save">SAVE NOW</button>
         <button class="hbtn" data-do="reload">RELOAD LAST SAVE</button>
         <button class="hbtn" data-do="newgame">NEW GAME</button>

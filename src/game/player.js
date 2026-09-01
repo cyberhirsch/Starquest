@@ -11,6 +11,43 @@ const STARTER = {
   loadout: { hardpoints: ['pulse', 'mining1'], utility: ['tractor', null] },
 };
 
+/** Old saves predate hull changes: pad or trim a loadout to the current slots. */
+function migrateHull(entry) {
+  const cls = SHIPS[entry.classId];
+  const src = entry.loadout || {};
+  const fit = (list, n) => {
+    const out = (list || []).slice(0, n);
+    while (out.length < n) out.push(null);
+    return out;
+  };
+  return {
+    classId: entry.classId,
+    loadout: {
+      hardpoints: fit(src.hardpoints, cls.hardpoints),
+      utility: fit(src.utility, cls.utility),
+    },
+  };
+}
+
+/** A save from before the starter kit changed can leave a pilot unable to mine. */
+function grantMissingBasics(p) {
+  const owns = (pred) => Object.keys(p.storage).some(pred)
+    || p.hangar.some((h) => h.loadout.hardpoints.some((id) => id && pred(id))
+      || h.loadout.utility.some((id) => id && pred(id)));
+  const active = p.hangar[p.active];
+  const fitInto = (list, id) => {
+    const slot = list.indexOf(null);
+    if (slot >= 0) { list[slot] = id; return true; }
+    return false;
+  };
+  if (!owns((id) => MODULES[id]?.beam)) {
+    if (!fitInto(active.loadout.hardpoints, 'mining1')) p.addModule('mining1');
+  }
+  if (!owns((id) => MODULES[id]?.tractor)) {
+    if (!fitInto(active.loadout.utility, 'tractor')) p.addModule('tractor');
+  }
+}
+
 export class Player {
   constructor() {
     this.credits = 4500;
@@ -136,7 +173,7 @@ export class Player {
       const p = new Player();
       p.credits = d.credits ?? p.credits;
       p.wanted = d.wanted ?? 0;
-      p.hangar = (d.hangar || p.hangar).filter((h) => SHIPS[h.classId]);
+      p.hangar = (d.hangar || p.hangar).filter((h) => SHIPS[h.classId]).map(migrateHull);
       if (!p.hangar.length) p.hangar = [{ ...STARTER }];
       p.active = Math.min(d.active ?? 0, p.hangar.length - 1);
       p.storage = d.storage || {};
@@ -145,6 +182,7 @@ export class Player {
       p.tutorial = d.tutorial || { step: 0, done: false };
       p._cargo = d.cargo || {};
       p.lastSaved = Date.now();
+      grantMissingBasics(p);
       return p;
     } catch { return null; }
   }

@@ -63,6 +63,9 @@ async function start() {
 
   const tutorial = new Tutorial(player);
   game.tutorial = tutorial;
+  try {
+    if (localStorage.getItem('starquest.flat') === '1') document.body.classList.add('flat');
+  } catch { /* storage may be unavailable */ }
   const ui = new UI(document.body, game);
   const input = createInput(canvas, document.body);
   const mobile = setupMobile(game, renderer, canvas, input);
@@ -458,7 +461,8 @@ async function start() {
   }
 
   boot.classList.add('hidden');
-  document.getElementById('ui').classList.add('flickering');
+  // Deliberately not animating any full-screen layer over the canvas — the CRT
+  // flicker lives in the composite shader instead.
   requestAnimationFrame(frame);
 
   addEventListener('pointerdown', () => { audio.init(); audio.resume(); }, { once: true });
