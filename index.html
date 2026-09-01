@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000604">
+<meta name="description" content="STARQUEST — a first-person retro laser vector-graphics space game. WebGPU, with a WebGL2 fallback. Installs to your phone.">
+<title>STARQUEST</title>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="STARQUEST">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="stylesheet" href="src/ui/style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="ui" class="ui">
+  <div id="topbar">
+    <div class="stat"><span>CR</span><b id="credits">0</b></div>
+    <div class="stat"><span>HOLD</span><b id="hold">0/0</b></div>
+    <div class="stat" id="wantedWrap"><span>BOUNTY</span><b id="wanted">0</b></div>
+    <div class="stat right"><span id="shipName">VEX SHUTTLE</span><b id="modeTag">PILOT</b></div>
+  </div>
+
+  <div id="targetPanel" class="panel hidden">
+    <div class="row"><b id="tgtName">—</b><i id="tgtDist">0 M</i></div>
+    <div class="bars">
+      <div class="bar"><i>HULL</i><u><s id="tgtHull"></s></u></div>
+      <div class="bar"><i>SHLD</i><u><s id="tgtShield"></s></u></div>
+    </div>
+    <div class="row small"><span id="tgtInfo"></span></div>
+  </div>
+
+  <div id="weapons" class="panel"></div>
+  <div id="log"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="speedout"><b id="speedVal">0</b><span>M/S</span></div>
+
+  <div id="btnRow">
+    <button class="hbtn" data-action="mode" title="Pilot / gunner (R)">MODE</button>
+    <button class="hbtn" data-action="target" title="Cycle target (T)">TGT</button>
+    <button class="hbtn" data-action="action" title="Dock / board (F)">ACT</button>
+    <button class="hbtn" data-action="inventory" title="Inventory &amp; loadout (Tab)">INV</button>
+    <button class="hbtn hidden" id="installBtn" title="Install to your home screen">INSTALL</button>
+  </div>
+
+  <div id="touchUI">
+    <div id="throttleBar">
+      <div id="throttleFill"></div>
+      <div id="throttleKnob"></div>
+      <span class="lbl up">FWD</span>
+      <span class="lbl mid">0</span>
+      <span class="lbl dn">REV</span>
+    </div>
+    <button id="fireBtn">FIRE</button>
+    <div id="stickZone"></div>
+    <div id="stickBase"><div id="stickKnob"></div></div>
+  </div>
+</div>
+
+<div id="rotateHint" class="hidden"><div><b>ROTATE TO LANDSCAPE</b><span>THE COCKPIT IS WIDER THAN IT IS TALL — TAP TO DISMISS</span></div></div>
+
+<div id="overlay" class="hidden"></div>
+<div id="boot">
+  <div class="bootbox">
+    <h1>STARQUEST</h1>
+    <p class="sub">HALCYON BELT — VECTOR FLIGHT SYSTEM</p>
+    <p id="bootMsg">INITIALISING WEBGPU…</p>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

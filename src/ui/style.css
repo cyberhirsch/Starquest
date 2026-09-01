@@ -1,0 +1,266 @@
+:root {
+  --green: #6cff9f;
+  --dim: #2e7d55;
+  --amber: #ffc23c;
+  --red: #ff5b47;
+  --blue: #7cc4ff;
+  --bg: #000604;
+  --font: "SF Mono", "Roboto Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--green);
+  font-family: var(--font); font-size: 13px; letter-spacing: 0.06em;
+  text-transform: uppercase; user-select: none; -webkit-user-select: none;
+  overscroll-behavior: none; touch-action: none;
+}
+
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+.ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+.ui button, .ui .clickable { pointer-events: auto; }
+.hidden { display: none !important; }
+
+/* ------------------------------------------------------------- chrome -- */
+.panel {
+  background: rgba(0, 24, 14, 0.42);
+  border: 1px solid rgba(108, 255, 159, 0.28);
+  box-shadow: 0 0 14px rgba(0, 255, 140, 0.10), inset 0 0 22px rgba(0, 60, 30, 0.35);
+}
+
+#topbar {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; gap: 18px; align-items: center;
+  padding: max(8px, env(safe-area-inset-top)) 16px 8px;
+  font-size: 12px;
+  background: linear-gradient(rgba(0, 20, 12, 0.65), transparent);
+}
+#topbar .stat { display: flex; gap: 7px; align-items: baseline; opacity: 0.95; }
+#topbar .stat span { color: var(--dim); }
+#topbar .stat b { color: var(--green); text-shadow: 0 0 8px rgba(108, 255, 159, 0.6); }
+#topbar .right { margin-left: auto; text-align: right; }
+#topbar .right b { color: var(--amber); text-shadow: 0 0 10px rgba(255, 194, 60, 0.55); }
+#wantedWrap.hot b { color: var(--red); text-shadow: 0 0 10px rgba(255, 91, 71, 0.7); }
+
+#targetPanel {
+  position: absolute; top: 44px; right: 14px; width: 232px; padding: 8px 10px;
+  font-size: 11px;
+}
+#targetPanel .row { display: flex; justify-content: space-between; gap: 8px; }
+#targetPanel .row b { color: var(--amber); }
+#targetPanel .row i { font-style: normal; color: var(--dim); }
+#targetPanel .small { margin-top: 5px; color: var(--dim); font-size: 10px; }
+#targetPanel .bars { margin-top: 6px; display: grid; gap: 3px; }
+#targetPanel .bar { display: flex; align-items: center; gap: 6px; }
+#targetPanel .bar i { font-style: normal; color: var(--dim); width: 32px; font-size: 10px; }
+#targetPanel .bar u { flex: 1; height: 5px; background: rgba(108, 255, 159, 0.14); display: block; }
+#targetPanel .bar s { display: block; height: 100%; background: var(--green); text-decoration: none;
+  box-shadow: 0 0 8px rgba(108, 255, 159, 0.8); transition: width 0.12s linear; }
+#tgtShield { background: var(--blue) !important; box-shadow: 0 0 8px rgba(124, 196, 255, 0.8) !important; }
+
+#weapons {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
+  padding: 5px 12px; font-size: 10.5px; display: flex; gap: 14px; color: var(--dim);
+  max-width: 74vw; overflow: hidden; white-space: nowrap;
+}
+#weapons b { color: var(--green); }
+#weapons .manual { color: var(--amber); }
+#weapons .empty { color: #7a3b3b; }
+
+#log {
+  position: absolute; left: 14px; bottom: 92px; width: 46vw; max-width: 460px;
+  pointer-events: none;
+  display: flex; flex-direction: column-reverse; gap: 3px; font-size: 11px;
+}
+#log div { opacity: 0; animation: logIn 0.18s forwards, logOut 0.7s 6s forwards; }
+#log .good { color: var(--green); }
+#log .warn { color: var(--amber); }
+#log .danger { color: var(--red); }
+#log .info { color: #8fdcb4; }
+@keyframes logIn { to { opacity: 0.92; } }
+@keyframes logOut { to { opacity: 0; } }
+
+#prompt {
+  position: absolute; left: 50%; top: 62%; transform: translateX(-50%);
+  padding: 7px 16px; border: 1px solid var(--amber); color: var(--amber);
+  background: rgba(30, 18, 0, 0.5); font-size: 12px;
+  animation: pulse 1.4s infinite ease-in-out; white-space: nowrap;
+}
+@keyframes pulse { 50% { opacity: 0.55; } }
+
+#speedout { position: absolute; left: 14px; top: 50%; transform: translateY(60px); font-size: 11px; }
+#speedout b { font-size: 15px; color: var(--green); }
+#speedout span { color: var(--dim); margin-left: 4px; }
+
+#btnRow {
+  position: absolute; right: 14px; bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap;
+  justify-content: flex-end; max-width: 40vw;
+}
+.hbtn {
+  pointer-events: auto; font: inherit; font-size: 11px; letter-spacing: 0.1em;
+  color: var(--green); background: rgba(0, 26, 15, 0.6);
+  border: 1px solid rgba(108, 255, 159, 0.4); padding: 9px 13px; cursor: pointer;
+  text-transform: uppercase; text-shadow: 0 0 8px rgba(108, 255, 159, 0.5);
+  transition: background 0.1s, color 0.1s;
+}
+.hbtn:hover, .hbtn:active { background: rgba(108, 255, 159, 0.18); }
+.hbtn.hot { border-color: var(--amber); color: var(--amber); }
+
+/* -------------------------------------------------------- touch controls */
+#touchUI { position: absolute; inset: 0; pointer-events: none; }
+body.touch #touchUI { pointer-events: none; }
+#throttleBar, #fireBtn, #stickZone { display: none; }
+body.touch #throttleBar, body.touch #fireBtn, body.touch #stickZone { display: block; }
+
+#throttleBar {
+  position: absolute; left: max(12px, env(safe-area-inset-left)); top: 20%; height: 46%;
+  width: 62px; pointer-events: auto; touch-action: none;
+  border: 1px solid rgba(108, 255, 159, 0.35); background: rgba(0, 22, 13, 0.4);
+  box-shadow: inset 0 0 20px rgba(0, 80, 40, 0.35);
+}
+#throttleFill {
+  position: absolute; left: 0; right: 0; background: rgba(108, 255, 159, 0.22);
+  border-block: 1px solid rgba(108, 255, 159, 0.5);
+}
+#throttleFill.reverse { background: rgba(255, 194, 60, 0.2); }
+#throttleKnob {
+  position: absolute; left: -5px; right: -5px; height: 3px; top: 50%;
+  background: var(--green); box-shadow: 0 0 12px rgba(108, 255, 159, 0.9);
+}
+#throttleBar .lbl { position: absolute; left: 0; right: 0; text-align: center; font-size: 9px; color: var(--dim); }
+#throttleBar .up { top: 5px; }
+#throttleBar .mid { top: 50%; margin-top: -6px; opacity: 0.5; }
+#throttleBar .dn { bottom: 5px; }
+
+#fireBtn {
+  position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(20px, env(safe-area-inset-bottom));
+  width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none;
+  font: inherit; font-size: 13px; letter-spacing: 0.12em; cursor: pointer;
+  color: var(--amber); background: radial-gradient(rgba(255, 194, 60, 0.16), rgba(40, 20, 0, 0.5));
+  border: 2px solid rgba(255, 194, 60, 0.55); text-shadow: 0 0 10px rgba(255, 194, 60, 0.7);
+}
+#fireBtn:active { background: radial-gradient(rgba(255, 194, 60, 0.45), rgba(60, 30, 0, 0.6)); }
+
+#stickZone { position: absolute; right: 0; top: 12%; width: 52%; height: 78%; pointer-events: auto; touch-action: none; }
+#stickBase {
+  position: fixed; display: none; width: 168px; height: 168px; margin: -84px 0 0 -84px;
+  border: 1px solid rgba(108, 255, 159, 0.35); border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 22px rgba(0, 255, 140, 0.12) inset;
+}
+#stickKnob {
+  position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px;
+  border: 2px solid rgba(108, 255, 159, 0.75); border-radius: 50%;
+  background: rgba(108, 255, 159, 0.12); box-shadow: 0 0 18px rgba(108, 255, 159, 0.35);
+}
+
+/* ------------------------------------------------------------ overlays -- */
+#overlay {
+  position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 40%, rgba(0, 20, 12, 0.82), rgba(0, 4, 2, 0.95));
+  padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom));
+  overflow: auto;
+}
+.screen {
+  width: min(1020px, 96vw); max-height: 94vh; display: flex; flex-direction: column;
+  border: 1px solid rgba(108, 255, 159, 0.4); background: rgba(0, 16, 9, 0.92);
+  box-shadow: 0 0 40px rgba(0, 255, 140, 0.10), inset 0 0 60px rgba(0, 40, 22, 0.5);
+}
+.screen > header {
+  display: flex; align-items: center; gap: 14px; padding: 12px 16px;
+  border-bottom: 1px solid rgba(108, 255, 159, 0.28);
+}
+.screen > header h2 { margin: 0; font-size: 16px; letter-spacing: 0.24em; color: var(--amber); font-weight: 500; }
+.screen > header .spacer { flex: 1; }
+.screen > header .meta { font-size: 11px; color: var(--dim); }
+.screen > header .meta b { color: var(--green); }
+.tabs { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.tab {
+  font: inherit; font-size: 11px; padding: 7px 12px; cursor: pointer; color: var(--dim);
+  background: transparent; border: 1px solid rgba(108, 255, 159, 0.22); text-transform: uppercase;
+}
+.tab.on { color: #001a0d; background: var(--green); border-color: var(--green); }
+.body { padding: 12px 16px 16px; overflow: auto; flex: 1; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+
+.list { display: flex; flex-direction: column; gap: 4px; }
+.item {
+  display: flex; align-items: center; gap: 10px; padding: 7px 9px;
+  border: 1px solid rgba(108, 255, 159, 0.16); background: rgba(0, 30, 18, 0.35);
+  font-size: 11.5px; cursor: pointer;
+}
+.item:hover { border-color: rgba(108, 255, 159, 0.5); background: rgba(0, 46, 27, 0.5); }
+.item.on { border-color: var(--amber); }
+.item .grow { flex: 1; }
+.item .qty { color: var(--amber); }
+.item .price { color: var(--green); }
+.item .sub { display: block; color: var(--dim); font-size: 10px; text-transform: none; letter-spacing: 0.02em; margin-top: 2px; }
+.item.locked { opacity: 0.45; cursor: not-allowed; }
+.item.empty { border-style: dashed; color: var(--dim); }
+
+h3 { font-size: 11px; color: var(--dim); letter-spacing: 0.2em; margin: 0 0 8px; font-weight: 500; }
+.section + .section { margin-top: 16px; }
+.rowbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.note { color: var(--dim); font-size: 10.5px; text-transform: none; letter-spacing: 0.03em; line-height: 1.5; }
+.big { font-size: 22px; color: var(--amber); letter-spacing: 0.2em; }
+
+/* breach mini-game */
+.breach { margin: 18px 0; }
+.breachBar {
+  position: relative; height: 46px; border: 1px solid rgba(108, 255, 159, 0.5);
+  background: rgba(0, 30, 18, 0.5); overflow: hidden;
+}
+.breachZone { position: absolute; top: 0; bottom: 0; background: rgba(108, 255, 159, 0.28);
+  border-inline: 1px solid var(--green); }
+.breachMark { position: absolute; top: -4px; bottom: -4px; width: 3px; background: var(--amber);
+  box-shadow: 0 0 14px var(--amber); }
+.pips { display: flex; gap: 6px; margin-top: 8px; }
+.pip { width: 22px; height: 5px; background: rgba(108, 255, 159, 0.18); }
+.pip.on { background: var(--green); box-shadow: 0 0 10px var(--green); }
+.pip.bad { background: var(--red); box-shadow: 0 0 10px var(--red); }
+
+/* boot + fatal */
+#boot {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); text-align: center;
+}
+.bootbox h1 { font-size: 34px; letter-spacing: 0.5em; margin: 0 0 6px; color: var(--green);
+  text-shadow: 0 0 26px rgba(108, 255, 159, 0.6); }
+.bootbox .sub { color: var(--dim); font-size: 11px; letter-spacing: 0.3em; margin: 0 0 22px; }
+#bootMsg { color: var(--amber); font-size: 12px; max-width: 620px; line-height: 1.7; text-transform: none; }
+#bootMsg a { color: var(--green); }
+
+.flickering { animation: flicker 3.5s infinite; }
+@keyframes flicker { 0%,96%,100% { opacity: 1; } 97% { opacity: 0.82; } 98.5% { opacity: 0.94; } }
+
+/* --------------------------------------------------------- orientation -- */
+#rotateHint {
+  position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 6, 4, 0.92); text-align: center; padding: 24px;
+}
+#rotateHint b { display: block; font-size: 17px; letter-spacing: 0.3em; color: var(--amber);
+  text-shadow: 0 0 18px rgba(255, 194, 60, 0.5); margin-bottom: 10px; }
+#rotateHint span { color: var(--dim); font-size: 11px; letter-spacing: 0.12em; }
+
+/* keep the touch controls clear of notches and home indicators */
+@media (max-height: 460px) {
+  #throttleBar { top: 14%; height: 56%; width: 54px; }
+  #fireBtn { width: 78px; height: 78px; }
+  #topbar { font-size: 11px; padding-top: 4px; }
+  #log { bottom: 76px; font-size: 10px; }
+}
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  #installBtn { display: none !important; }
+}
+
+/* touch layout: keep the log and speed readout clear of the thumb controls */
+body.touch #log { left: 92px; bottom: auto; top: 34px; width: 42vw; flex-direction: column; }
+body.touch #log div { animation: logIn 0.18s forwards, logOut 0.7s 5s forwards; }
+body.touch #speedout { left: 92px; top: auto; bottom: 16px; transform: none; }
+body.touch #btnRow { bottom: max(12px, env(safe-area-inset-bottom)); right: max(12px, env(safe-area-inset-right)); }
+body.touch #weapons { bottom: 74px; }
+body.touch #prompt { top: 22%; }
+body.touch #targetPanel { top: 34px; right: 12px; width: 210px; }

@@ -1,0 +1,24 @@
+{
+  "name": "starquest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "First-person retro laser vector-graphics space game. WebGPU with a WebGL2 fallback, installable as a PWA on Android and iOS.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test/integration.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "sw": "node tools/make-sw.mjs",
+    "test:browser": "node test/browser.mjs"
+  },
+  "keywords": [
+    "webgpu",
+    "webgl2",
+    "vector-graphics",
+    "game",
+    "pwa",
+    "space"
+  ],
+  "license": "MIT"
+}
