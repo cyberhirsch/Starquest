@@ -58,6 +58,12 @@ export const ORES = {
   xenite:   { id: 'xenite', name: 'XENITE', kind: 'ore', price: 165, tier: 4 },
 };
 
+/** What comes off a hull rather than out of a rock. */
+export const SALVAGE = {
+  scrap: { id: 'scrap', name: 'HULL SCRAP', kind: 'salvage', price: 34 },
+  cores: { id: 'cores', name: 'DRIVE CORES', kind: 'salvage', price: 120 },
+};
+
 export const TRADE = {
   alloy:    { id: 'alloy', name: 'HULL ALLOY', kind: 'goods', price: 42 },
   cells:    { id: 'cells', name: 'POWER CELLS', kind: 'goods', price: 70 },
@@ -105,6 +111,17 @@ export const MODULES = {
     blurb: 'Wide-aperture cutter. Cracks a big rock in one pass.',
   }),
 
+  cutter1: W({
+    id: 'cutter1', name: 'SALVAGE CUTTER', price: 9800, beam: true, dmg: 6, rate: 0.05,
+    range: 340, energy: 14, cut: 13, color: 'warn',
+    blurb: 'Cuts a dead hull to pieces and pulls the fittings out whole. Useless against anything still under power.',
+  }),
+  cutter2: W({
+    id: 'cutter2', name: 'HEAVY CUTTING RIG', price: 26000, beam: true, dmg: 9, rate: 0.05,
+    range: 560, energy: 22, cut: 26, color: 'warn',
+    blurb: 'Yard-grade cutting head. Strips a freighter down to spars in under a minute.',
+  }),
+
   /* auto-turrets — the answer to a hull with more mounts than hands */
   auto1: T({
     id: 'auto1', name: 'AUTO-TURRET MK I', price: 6500, dmg: 6, rate: 0.32, speed: 800,
@@ -141,7 +158,7 @@ export const MODULES = {
   repair: U({ id: 'repair', name: 'REPAIR DRONES', price: 18000, repair: 3.5, blurb: 'Slowly rebuilds hull while out of combat.' }),
 };
 
-export const ITEMS = { ...ORES, ...TRADE, ...MODULES };
+export const ITEMS = { ...ORES, ...SALVAGE, ...TRADE, ...MODULES };
 
 export const itemName = (id) => ITEMS[id]?.name ?? id.toUpperCase();
 export const itemPrice = (id) => ITEMS[id]?.price ?? 0;

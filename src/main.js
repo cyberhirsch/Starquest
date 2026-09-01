@@ -98,6 +98,7 @@ async function start() {
   world.onWingLost = (ship) => Crew.onWingLost(player, world, ship);
   world.onContractKill = (ship) => Contracts.onKill(player, world, ship);
   world.onContractBoard = (ship) => Contracts.onBoard(player, world, ship);
+  world.onHulkStripped = (ship) => Contracts.onStrip(player, world, ship);
 
   world.onPlayerDamage = (hit) => {
     const frac = hit.amount / Math.max(1, player.ship.stats.hullMax);

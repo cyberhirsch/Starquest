@@ -31,7 +31,7 @@ function bountyContract(world, player) {
 function supplyContract(world, player) {
   const pool = world.sector.id === 'halcyon'
     ? ['iron', 'silicon', 'ice', 'gold']
-    : ['alloy', 'cells', 'iron', 'platinum'];
+    : ['scrap', 'scrap', 'cores', 'alloy', 'iron'];
   const item = pick(pool);
   // never ask for more than the hold can take in one run, or it cannot be flown
   const hold = player.ship?.stats?.cargoMax ?? 30;
@@ -73,9 +73,20 @@ function salvageContract(world, player) {
   };
 }
 
+function stripContract(world, player) {
+  const count = 1 + randi(3);
+  return {
+    id: `c${NEXT++}`, type: 'strip', need: count, progress: 0,
+    title: `BREAKERS — CUT UP ${count} HULL${count > 1 ? 'S' : ''}`,
+    brief: `The yard wants ${count} adrift hull${count > 1 ? 's' : ''} taken down to spars, not merely emptied. Bring a cutting head.`,
+    reward: money(count * rand(6800, 4200)),
+    station: world.station.def.id,
+  };
+}
+
 const MAKERS = {
   halcyon: [bountyContract, supplyContract, supplyContract, courierContract],
-  cinder: [salvageContract, salvageContract, bountyContract, courierContract, supplyContract],
+  cinder: [stripContract, stripContract, salvageContract, bountyContract, courierContract, supplyContract],
 };
 
 /** Refresh the board a station is offering. */
@@ -132,6 +143,15 @@ export function onKill(player, world, ship) {
     c.progress++;
     if (c.progress >= c.need) pay(player, c, world);
     else world.log(`BOUNTY ${c.progress}/${c.need}`, 'good');
+  }
+}
+
+export function onStrip(player, world, ship) {
+  for (const c of [...player.contracts]) {
+    if (c.type !== 'strip') continue;
+    c.progress++;
+    if (c.progress >= c.need) pay(player, c, world);
+    else world.log(`BREAKERS ${c.progress}/${c.need}`, 'good');
   }
 }
 

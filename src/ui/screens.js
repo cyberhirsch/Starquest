@@ -114,9 +114,16 @@ export class UI {
         this.el.tgtShield.style.width = `${clamp(t.shield / Math.max(1, t.stats.shieldMax), 0, 1) * 100}%`;
         const scan = ship.stats.scanner;
         const manifest = scan ? Object.entries(t.cargo).map(([id, q]) => `${q} ${ITEMS[id]?.name || id}`).join(', ') : '';
-        this.el.tgtInfo.textContent = t.disabled
-          ? (t.looted ? 'ADRIFT — HOLD STRIPPED' : 'ADRIFT — BOARDABLE')
-          : `${t.cls.name} · ${t.faction.toUpperCase()}${manifest ? ` · ${manifest}` : ''}`;
+        if (t.disabled) {
+          const salv = t.salvage
+            ? ` · HULL ${Math.max(0, Math.round((t.salvage.integrity / t.salvage.max) * 100))}%`
+            : '';
+          this.el.tgtInfo.textContent =
+            `ADRIFT — ${t.looted ? 'HOLD STRIPPED' : 'BOARDABLE'}${salv}`;
+        } else {
+          this.el.tgtInfo.textContent =
+            `${t.cls.name} · ${t.faction.toUpperCase()}${manifest ? ` · ${manifest}` : ''}`;
+        }
       } else if (t.kind === 'asteroid') {
         this.el.tgtName.textContent = `${t.type.ore.toUpperCase()} ASTEROID`;
         this.el.tgtHull.style.width = `${clamp(t.hp / t.hpMax, 0, 1) * 100}%`;
@@ -658,6 +665,10 @@ export class UI {
         ['G', 'Flight assist · M this manual'],
       ]).map(([k, v]) => `<div class="item"><span class="grow"><b>${k}</b><span class="sub">${v}</span></span></div>`).join('')}</div></div>
       <div class="section"><h3>THE BELT</h3>
+      <p class="note">Through the jump gate is <b>Cinder Reach</b>: a graveyard of adrift hulls,
+      twice the pirates and no Authority. Board a hull for its hold; fit a <b>salvage cutter</b>
+      and you can cut the hull itself apart for scrap and its fittings, which come out whole and
+      go straight to your storage. Tallow Yard pays over the odds for both.</p>
       <p class="note">Graphics: <b>${this.game.renderer.backend.toUpperCase()}</b> at
       ${this.game.renderer.width}×${this.game.renderer.height}
       (${Math.round((this.game.renderer.resScale || 1) * 100)}% scale)${this.game.fps ? `, ${Math.round(this.game.fps)} fps` : ''}.

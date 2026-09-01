@@ -327,8 +327,32 @@ export function damageShip(ship, amount, world, opts = {}) {
   if (ship.hull <= 0) destroyShip(ship, world, opts.from);
 }
 
+/** What a dead hull is worth to someone with a cutting head. */
+export function salvagePool(ship) {
+  const hull = ship.stats.hullMax;
+  // the cheap fittings usually survive the cut; the expensive ones rarely do,
+  // or a sweep through the graveyard would out-earn every other profession
+  const survives = (id) => {
+    const price = MODULES[id]?.price ?? 0;
+    return Math.random() < clamp(0.45 - price / 70000, 0.06, 0.42);
+  };
+  const fitted = [
+    ...ship.hardpoints.map((h) => h.moduleId),
+    ...ship.utility,
+  ].filter(Boolean).filter(survives);
+  const max = 55 + hull / 5;
+  return {
+    max, integrity: max,
+    scrap: Math.round(6 + hull / 14),
+    cores: Math.random() < 0.4 ? 1 + Math.floor(Math.random() * 2) : 0,
+    modules: fitted,
+    taken: 0,
+  };
+}
+
 export function disableShip(ship, world) {
   ship.disabled = true;
+  ship.salvage = ship.salvage || salvagePool(ship);
   ship.throttle = 0;
   ship.shield = 0;
   ship.ion = 0;

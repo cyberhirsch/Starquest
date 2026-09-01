@@ -184,6 +184,12 @@ section('CHASE');
   const me = player.ship;
   me.pos = v3(0, 0, 0);
   me.vel = v3(0, 0, 0);
+  // earlier sections left a bounty on us; a running fight is a different test
+  player.wanted = 0;
+  world.grace = 300;
+  for (const s of [...world.ships]) {
+    if (s.faction === 'pirate') world.ships.splice(world.ships.indexOf(s), 1);
+  }
 
   const runner = world.spawnPirate();
   runner.pos = v3(0, 0, -400);
@@ -276,6 +282,44 @@ section('WINGMEN');
 
   Crew.onWingLost(player, world, wing);
   ok('a loss comes off the books', !player.crew.some((c) => c.name === wing.name));
+}
+
+/* --------------------------------------------------------------- salvage */
+section('SALVAGE');
+{
+  world.jumpTo('cinder');
+  player.buildShip(world);
+  player.ship.cargo = {};
+  const hulk = world.ships.find((s) => s.disabled && !s.dead);
+  ok('the reach has hulls to cut', !!hulk, hulk?.name);
+  ok('a hulk arrives with something worth taking', hulk.salvage.max > 0,
+    `${hulk.salvage.modules.length} fittings, ${hulk.salvage.scrap} scrap`);
+
+  const live = world.spawnPirate();
+  live.pos = [...player.ship.pos];
+  world.stripHulk(live, MODULES.cutter1, player.ship, 1 / 60, live.pos);
+  ok('a cutter does nothing to a hull under power', !live.salvage);
+
+  const storeBefore = Object.values(player.storage).reduce((a, b) => a + b, 0);
+  let t = 0;
+  while (!hulk.dead && t < 90) {
+    world.stripHulk(hulk, MODULES.cutter1, player.ship, 1 / 60, hulk.pos);
+    t += 1 / 60;
+  }
+  ok('a hulk can be cut to nothing', hulk.dead, `${t.toFixed(1)}s with a cutter`);
+  ok('scrap ends up in the hold', (player.ship.cargo.scrap || 0) > 0,
+    `${player.ship.cargo.scrap} scrap`);
+  // one hulk may carry nothing, so judge recovery across the whole graveyard
+  for (const h of world.ships.filter((x) => x.disabled && !x.dead)) {
+    let u = 0;
+    while (!h.dead && u < 90) { world.stripHulk(h, MODULES.cutter1, player.ship, 1 / 60, h.pos); u += 1 / 60; }
+  }
+  const storeAfter = Object.values(player.storage).reduce((a, b) => a + b, 0);
+  ok('fittings come out whole', storeAfter > storeBefore,
+    `${storeAfter - storeBefore} modules off the graveyard`);
+  ok('the yard pays a premium for scrap',
+    world.station.market.sellPrice('scrap') > 34,
+    `${world.station.market.sellPrice('scrap')} cr vs 34 base`);
 }
 
 /* ------------------------------------------------------------ simulation */

@@ -1,6 +1,6 @@
 // Halcyon Depot: market, shipyard, services.
 
-import { ORES, TRADE, MODULES, SHIPS, ITEMS, PLAYER_SHIPS } from './data.js';
+import { ORES, SALVAGE, TRADE, MODULES, SHIPS, ITEMS, PLAYER_SHIPS } from './data.js';
 import { addCargo, removeCargo, cargoUsed, cargoFree, recalc, getLoadout } from './ship.js';
 import { rand, clamp } from '../core/math.js';
 
@@ -20,13 +20,14 @@ export class Market {
   /** A station with no belt of its own pays over the odds for ore. */
   biasFor(id) {
     if (ORES[id]) return this.bias.ore ?? 1;
+    if (SALVAGE[id]) return this.bias.salvage ?? 1;
     if (TRADE[id]) return this.bias.goods ?? 1;
     return 1;
   }
 
   roll() {
-    for (const id of Object.keys({ ...ORES, ...TRADE })) {
-      this.mods[id] = rand(1.35, 0.72);
+    for (const id of Object.keys({ ...ORES, ...SALVAGE, ...TRADE })) {
+      this.mods[id] = rand(1.16, 0.88);
       this.stock[id] = Math.round(rand(140, 20));
     }
   }
@@ -81,12 +82,12 @@ export function sellCargo(player, market, id, qty) {
 export function sellAllOre(player, market) {
   let total = 0, lines = 0;
   for (const id of Object.keys(player.ship.cargo)) {
-    if (!ORES[id]) continue;
+    if (!ORES[id] && !SALVAGE[id]) continue;
     const r = sellCargo(player, market, id, player.ship.cargo[id]);
     if (r.ok) { total += r.credits; lines++; }
   }
-  return lines ? { ok: true, msg: `OFFLOADED ${lines} ORE LOTS FOR ${total} CR` }
-    : { ok: false, msg: 'NO ORE IN THE HOLD' };
+  return lines ? { ok: true, msg: `OFFLOADED ${lines} LOTS FOR ${total} CR` }
+    : { ok: false, msg: 'NO ORE OR SALVAGE IN THE HOLD' };
 }
 
 export function buyCargo(player, market, id, qty) {

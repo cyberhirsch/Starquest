@@ -11,7 +11,7 @@ import { ASTEROID_SHAPES, ASTEROID_SHAPES_LOW } from '../render/models.js';
 import { ORE_COLORS } from '../render/palette.js';
 import {
   createShip, flyShip, regen, updateTurrets, damageShip, destroyShip, disableShip,
-  addCargo, cargoFree, recalc,
+  addCargo, cargoFree, recalc, salvagePool,
 } from './ship.js';
 import { runAI } from './ai.js';
 
@@ -184,11 +184,23 @@ export class World {
   /** A hull that never made it home: adrift, powerless, and worth boarding. */
   spawnDerelict() {
     const cls = pick(['hauler', 'prospector', 'corsair', 'shuttle']);
+    // a hull is only worth cutting up if it was fitted out when it died
+    // weighted toward workaday gear — a dead prospector is not carrying a flak turret
+    const guns = ['pulse', 'pulse', 'pulse', 'pulse', 'mining1', 'mining1', 'mining1',
+      'auto1', 'auto1', 'auto1', 'burst', 'burst', 'auto2', 'mining2', 'rail', 'disruptor'];
+    const kit = ['shield1', 'shield1', 'shield1', 'hold1', 'hold1', 'hold1', 'tractor', 'tractor',
+      'scanner', 'scanner', 'thruster', 'thruster', 'armour', 'repair', 'shield2', 'hold2'];
     const s = createShip(cls, 'civilian', {
       pos: this.randomEdgePoint(v3()),
       name: pick(['THE LONG SILENCE', 'ASHFALL', 'MOTHER OF SPARROWS', 'DEAD RECKONING',
         'LAST TUESDAY', 'COLD COMFORT', 'NO SUCH LUCK']),
       credits: Math.round(rand(5200, 400)),
+      loadout: {
+        hardpoints: Array.from({ length: SHIPS[cls].hardpoints },
+          () => (Math.random() < 0.7 ? pick(guns) : null)),
+        utility: Array.from({ length: SHIPS[cls].utility },
+          () => (Math.random() < 0.6 ? pick(kit) : null)),
+      },
     });
     for (let i = 0; i < 3; i++) {
       const [id, n] = pick([['alloy', 30], ['cells', 22], ['meds', 14], ['gold', 18],
@@ -196,6 +208,7 @@ export class World {
       addCargo(s, id, randi(n) + 3);
     }
     s.disabled = true;
+    s.salvage = salvagePool(s);
     s.hull = s.stats.hullMax * rand(0.3, 0.08);
     s.shield = 0;
     vrandSphere(s.vel, rand(9, 1));
@@ -347,6 +360,8 @@ export class World {
     const dt = 1 / 60;
     if (bestKind === 'asteroid') {
       this.mineAsteroid(best, module, ship, dt, end);
+    } else if (module.cut) {
+      this.stripHulk(best, module, ship, dt, end);
     } else {
       damageShip(best, module.dmg * dt * 2.2, this, { from: ship, point: end, ion: (module.ion || 0) * dt });
       if (Math.random() < 0.4) this.sparks(end, 1, 2);
@@ -369,6 +384,57 @@ export class World {
       }
     }
     if (a.hp <= 0) this.breakAsteroid(a, ship);
+  }
+
+  /** Cut a dead hull apart: scrap into the hold, fittings out whole. */
+  stripHulk(hulk, module, by, dt, point) {
+    if (!hulk.disabled || hulk.dead) {
+      if (this.time - (this._cutWarn || -99) > 4) {
+        this._cutWarn = this.time;
+        this.log('CUTTER NEEDS A HULL WITH ITS POWER DOWN', 'warn');
+      }
+      return;
+    }
+    hulk.salvage = hulk.salvage || salvagePool(hulk);
+    const pool = hulk.salvage;
+    const cut = Math.min(module.cut * dt, pool.integrity);
+    pool.integrity -= cut;
+    hulk.flash = 1;
+    if (Math.random() < 0.5) this.sparks(point, 1, 3, [1, 0.75, 0.3]);
+
+    const mine = by === this.player.ship;
+    const frac = cut / pool.max;
+
+    if (mine) {
+      this.scrapAccum = (this.scrapAccum || 0) + frac * pool.scrap;
+      while (this.scrapAccum >= 1) {
+        this.scrapAccum -= 1;
+        if (addCargo(by, 'scrap', 1) === 0) { this.warnHoldFull(); break; }
+      }
+      // fittings come out whole, spaced through the cut
+      const step = pool.max / (pool.modules.length + 1);
+      while (pool.modules.length && pool.integrity < step * pool.modules.length) {
+        const id = pool.modules.pop();
+        this.player.addModule(id);
+        this.player.stats.salvaged = (this.player.stats.salvaged || 0) + 1;
+        this.log(`RECOVERED — ${MODULES[id]?.name || id}`, 'good');
+      }
+    }
+
+    if (pool.integrity <= 0) this.breakHulk(hulk, by, mine);
+  }
+
+  breakHulk(hulk, by, mine) {
+    if (mine && hulk.salvage?.cores) addCargo(by, 'cores', hulk.salvage.cores);
+    for (const [id, qty] of Object.entries(hulk.cargo)) {
+      if (qty > 0) this.spawnPod(hulk.pos, hulk.vel, id, qty);
+    }
+    hulk.cargo = {};
+    hulk.dead = true;
+    hulk.deadAt = this.time;
+    this.explode(hulk.pos, hulk.vel, hulk.radius * 2.2, 0.8);
+    this.log(`${hulk.name} STRIPPED TO SPARS`, 'good');
+    this.onHulkStripped?.(hulk);
   }
 
   warnHoldFull() {
@@ -751,6 +817,15 @@ export class World {
       const wantCiv = Math.round(6 * (this.sector?.traders ?? 1));
       if (civ < wantCiv) (Math.random() < 0.5 ? this.spawnTrader() : this.spawnMiner()).ai.t = 0;
     }
+    // the graveyard restocks, or the salvage trade dries up
+    this.derelictTimer = (this.derelictTimer ?? 40) - dt;
+    if (this.derelictTimer <= 0) {
+      this.derelictTimer = rand(70, 40);
+      const want = this.sector?.derelicts ?? 0;
+      const have = this.ships.filter((s) => s.disabled && !s.dead && !s.looted).length;
+      if (want && have < want) this.spawnDerelict();
+    }
+
     // the law turns up when you have a price on your head
     this.secTimer = (this.secTimer ?? 20) - dt;
     if (this.secTimer <= 0) {

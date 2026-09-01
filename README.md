@@ -82,6 +82,15 @@ settled out of your hold the moment you dock, sealed courier freight for the oth
 station, and salvage jobs paid on boarding adrift hulls. Three at a time; the tracked
 one shows on the HUD. Dropping one costs you standing.
 
+## Salvage
+
+Boarding empties a hull's hold. A **salvage cutter** takes the hull itself apart:
+scrap into your cargo, and whatever was bolted to it recovered whole into storage —
+cheap fittings usually survive the cut, expensive ones rarely do. The hulk breaks up
+when there is nothing left. Cinder Reach restocks its dead, and Tallow Yard pays well
+over the odds for scrap and drive cores. Clearing the whole graveyard is worth roughly
+what a Corsair costs, if you live through it.
+
 ## Crew
 
 Hire a pilot at either station and they fly their own hull on your wing, break to

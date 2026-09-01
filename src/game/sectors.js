@@ -24,7 +24,7 @@ export const SECTORS = {
       shipyard: true,
       blurb: 'Authority-licensed depot. Hulls, modules, repairs, and a contracts board.',
       // an ore-rich system pays fairly for rock and dearly for anything shipped in
-      priceBias: { ore: 1.0, goods: 1.24 },
+      priceBias: { ore: 1.0, goods: 1.24, salvage: 0.78 },
     },
     gates: [{ to: 'cinder', pos: [3300, 240, 2500] }],
   },
@@ -50,7 +50,7 @@ export const SECTORS = {
       shipyard: false,
       blurb: 'A scavenger yard bolted to a dead freighter. No hulls for sale, no questions asked.',
       // no belt of its own, so it pays over the odds for ore and dumps salvage cheap
-      priceBias: { ore: 1.38, goods: 0.72 },
+      priceBias: { ore: 1.38, goods: 0.72, salvage: 1.55 },
     },
     gates: [{ to: 'halcyon', pos: [-2900, -180, -2600] }],
   },
