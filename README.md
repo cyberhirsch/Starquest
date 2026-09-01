@@ -64,6 +64,30 @@ and whenever the page is hidden or closed — so swiping the app away does not c
 progress. `SAVE NOW` and `RELOAD LAST SAVE` live in the manual (`M`, or the flight
 manual button).
 
+## Two sectors
+
+**Halcyon Belt** is licensed, patrolled and rich in rock. **Cinder Reach** through the
+jump gate is a graveyard — thick with adrift hulls to board, twice the pirates, and no
+Authority at all. Fly into a gate ring and use ACT to jump; your wingmen come with you.
+
+The two stations want different things. Tallow Yard has no belt of its own so it pays
+around 40% over the odds for ore and dumps salvaged goods cheap, while Halcyon Depot is
+the reverse. That is a trade route: mine here, sell there, fill the hold with cheap
+goods, sell them back home.
+
+## Contracts
+
+Halcyon Depot and Tallow Yard both keep a board. Bounties on pirate hulls, supply runs
+settled out of your hold the moment you dock, sealed courier freight for the other
+station, and salvage jobs paid on boarding adrift hulls. Three at a time; the tracked
+one shows on the HUD. Dropping one costs you standing.
+
+## Crew
+
+Hire a pilot at either station and they fly their own hull on your wing, break to
+engage what threatens you, and follow you through jumps. Two on the books at most, and
+no insurance if they are shot down.
+
 ## The belt
 
 - **Mine.** Fit a mining laser and cut rocks apart. Ore trickles straight into the
@@ -113,6 +137,10 @@ src/
     player.js         hangar, credits, storage, persistence
     station.js        market, shipyard, outfitting, services
     boarding.js       breach mini-game and loot
+  game/
+    sectors.js        sector and station definitions
+    contracts.js      the station boards and what settles them
+    crew.js           hired wingmen
   ui/
     screens.js        DOM overlays        hud.js    vector HUD, radar, reticles
     input.js          keyboard/mouse/touch      mobile.js  PWA, wake lock, scaling

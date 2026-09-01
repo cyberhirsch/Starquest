@@ -351,6 +351,7 @@ export function destroyShip(ship, world, killer) {
       left -= n;
     }
   }
+  if (ship.wing) world.onWingLost?.(ship);
   if (killer === world.player.ship) world.onPlayerKill(ship);
 }
 

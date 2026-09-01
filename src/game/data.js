@@ -158,9 +158,14 @@ export const ASTEROID_TYPES = [
   { ore: 'xenite', weight: 4, yieldMul: 0.4 },
 ];
 
-export function rollAsteroidType() {
-  const total = ASTEROID_TYPES.reduce((s, t) => s + t.weight, 0);
+/** `bias` scales the weights per ore, letting a sector have its own geology. */
+export function rollAsteroidType(bias = null) {
+  const w = ASTEROID_TYPES.map((t) => t.weight * (bias?.[t.ore] ?? 1));
+  const total = w.reduce((a, b) => a + b, 0);
   let r = Math.random() * total;
-  for (const t of ASTEROID_TYPES) { r -= t.weight; if (r <= 0) return t; }
+  for (let i = 0; i < ASTEROID_TYPES.length; i++) {
+    r -= w[i];
+    if (r <= 0) return ASTEROID_TYPES[i];
+  }
   return ASTEROID_TYPES[0];
 }

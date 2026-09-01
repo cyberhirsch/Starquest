@@ -148,6 +148,7 @@ export class Boarding {
     if (this.stage === 'loot') {
       this.target.looted = true;
       this.player.stats.boarded++;
+      this.world.onContractBoard?.(this.target);
       this.stage = 'done';
       this.result = { ok: true, msg: `BOARDED ${this.target.name} — ${this.taken} UNITS TAKEN` };
       // pirate hulls are fair game; anyone else files a report

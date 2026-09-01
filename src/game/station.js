@@ -5,12 +5,23 @@ import { addCargo, removeCargo, cargoUsed, cargoFree, recalc, getLoadout } from 
 import { rand, clamp } from '../core/math.js';
 
 export class Market {
-  constructor() {
+  constructor(def = {}) {
+    this.def = def;
+    this.name = def.name || 'DEPOT';
+    this.bias = def.priceBias || { ore: 1, goods: 1 };
+    this.shipyard = def.shipyard !== false;
     this.mods = {};
     this.stock = {};
     this.roll();
     this.shipStock = PLAYER_SHIPS.filter((id) => SHIPS[id].price > 0);
     this.moduleStock = Object.keys(MODULES);
+  }
+
+  /** A station with no belt of its own pays over the odds for ore. */
+  biasFor(id) {
+    if (ORES[id]) return this.bias.ore ?? 1;
+    if (TRADE[id]) return this.bias.goods ?? 1;
+    return 1;
   }
 
   roll() {
@@ -24,14 +35,14 @@ export class Market {
   sellPrice(id) {
     const base = ITEMS[id]?.price ?? 0;
     if (MODULES[id]) return Math.round(base * 0.45);
-    return Math.max(1, Math.round(base * (this.mods[id] ?? 1) * 0.92));
+    return Math.max(1, Math.round(base * (this.mods[id] ?? 1) * this.biasFor(id) * 0.92));
   }
 
   /** What it charges you per unit. */
   buyPrice(id) {
     const base = ITEMS[id]?.price ?? 0;
     if (MODULES[id]) return base;
-    return Math.max(1, Math.round(base * (this.mods[id] ?? 1) * 1.12));
+    return Math.max(1, Math.round(base * (this.mods[id] ?? 1) * this.biasFor(id) * 1.12));
   }
 
   shipPrice(classId, player) {
@@ -107,6 +118,7 @@ export function sellModule(player, market, id) {
 }
 
 export function buyShip(player, market, classId, world) {
+  if (market.shipyard === false) return { ok: false, msg: 'NO SHIPYARD AT THIS STATION' };
   const price = market.shipPrice(classId, player);
   if (player.credits < price) return { ok: false, msg: 'INSUFFICIENT CREDITS' };
   player.credits -= price;

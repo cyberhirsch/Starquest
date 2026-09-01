@@ -59,6 +59,9 @@ export class Player {
     this.active = 0;
     this.storage = {};                              // modules owned but not fitted
     this.tutorial = { step: 0, done: false };
+    this.sector = 'halcyon';
+    this.contracts = [];
+    this.crew = [];
     this.lastSaved = 0;
     this.stats = { kills: 0, mined: 0, rocks: 0, boarded: 0, earned: 0, docked: 0 };
     this.vouchers = {};                             // classId -> discount claims from boarding
@@ -149,7 +152,7 @@ export class Player {
       v: 1, credits: this.credits, wanted: this.wanted, hangar: this.hangar,
       active: this.active, storage: this.storage, stats: this.stats,
       vouchers: this.vouchers, cargo: this.ship ? this.ship.cargo : {},
-      tutorial: this.tutorial,
+      tutorial: this.tutorial, sector: this.sector, contracts: this.contracts, crew: this.crew,
     };
   }
 
@@ -180,6 +183,9 @@ export class Player {
       p.stats = { ...p.stats, ...(d.stats || {}) };
       p.vouchers = d.vouchers || {};
       p.tutorial = d.tutorial || { step: 0, done: false };
+      p.sector = d.sector || 'halcyon';
+      p.contracts = d.contracts || [];
+      p.crew = d.crew || [];
       p._cargo = d.cargo || {};
       p.lastSaved = Date.now();
       grantMissingBasics(p);

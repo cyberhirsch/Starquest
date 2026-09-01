@@ -2,7 +2,7 @@
 
 import {
   v3, vcopy, vset, vsub, vadd, vscale, vaddScaled, vdot, vlen, vlen2, vnorm, vdist,
-  vcross, vrandSphere, qconj, qrot, qforward, clamp, lerp, rand, leadTarget,
+  vcross, vrandSphere, qconj, qrot, qforward, qright, clamp, lerp, rand, leadTarget,
 } from '../core/math.js';
 import { MODULES } from './data.js';
 import { fireMount, mountWorldPos, cargoFree } from './ship.js';
@@ -10,7 +10,7 @@ import { fireMount, mountWorldPos, cargoFree } from './ship.js';
 const _dir = v3(), _loc = v3(), _lead = v3(), _tmp = v3(), _mz = v3(), _q = [0, 0, 0, 1];
 
 /** Point the nose at a world-space direction. Returns the angle error (rad). */
-function steer(ship, dirWorld, control, gain = 1.8) {
+export function steer(ship, dirWorld, control, gain = 1.8) {
   qconj(_q, ship.quat);
   qrot(_loc, _q, dirWorld);
   const fwd = -_loc[2];
@@ -22,7 +22,7 @@ function steer(ship, dirWorld, control, gain = 1.8) {
   return Math.acos(clamp(vdot(dirWorld, qforward(_tmp, ship.quat)), -1, 1));
 }
 
-function steerTo(ship, pos, control, gain) {
+export function steerTo(ship, pos, control, gain) {
   vsub(_dir, pos, ship.pos);
   vnorm(_dir, _dir);
   return steer(ship, _dir, control, gain);
@@ -80,6 +80,7 @@ export function runAI(ship, world, dt) {
     case 'security': combat(ship, world, dt, control, 0.15); break;
     case 'trader': trader(ship, world, dt, control); break;
     case 'miner': miner(ship, world, dt, control); break;
+    case 'wing': wing(ship, world, dt, control); break;
     default: control.throttle = 0;
   }
 }
@@ -127,6 +128,36 @@ function combat(ship, world, dt, control, fleeAt) {
   vnorm(_lead, vsub(_lead, t.pos, ship.pos));
   const aimErr = Math.acos(clamp(vdot(qforward(_tmp, ship.quat), _lead), -1, 1));
   shoot(ship, world, t, aimErr, dist);
+}
+
+/** Hired guns: hold formation on the player, break to fight what threatens them. */
+function wing(ship, world, dt, control) {
+  const ai = ship.ai;
+  const lead = world.player.ship;
+  if (!lead || lead.dead) { control.throttle = 0; return; }
+
+  if (!ship.target || ship.target.dead || ship.target.disabled || ai.t > 3) {
+    ai.t = 0;
+    ship.target = findPrey(ship, world);
+  }
+  // only break formation for something actually near the one they are paid to guard
+  const threat = ship.target && vdist(ship.target.pos, lead.pos) < 1800 ? ship.target : null;
+  if (threat) {
+    ship.target = threat;
+    combat(ship, world, dt, control, 0.12);
+    return;
+  }
+
+  // form up off the leader's wing
+  const slot = ai.slot ?? 0;
+  qright(_tmp, lead.quat);
+  vaddScaled(_dir, lead.pos, _tmp, (slot % 2 === 0 ? 1 : -1) * (110 + slot * 40));
+  qforward(_tmp, lead.quat);
+  vaddScaled(_dir, _dir, _tmp, -90);
+
+  const gap = vdist(ship.pos, _dir);
+  steerTo(ship, _dir, control, 1.5);
+  control.throttle = gap > 260 ? 1 : gap > 90 ? 0.55 : -0.1;
 }
 
 function trader(ship, world, dt, control) {

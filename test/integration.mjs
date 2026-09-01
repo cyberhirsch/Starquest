@@ -7,6 +7,8 @@ import { Market, sellAllOre, buyShip, buyModule, repair } from '../src/game/stat
 import { Boarding, boardBlocker } from '../src/game/boarding.js';
 import { createShip, flyShip, fireMount, updateTurrets, damageShip, cargoUsed, addCargo, recalc } from '../src/game/ship.js';
 import { MODULES } from '../src/game/data.js';
+import * as Contracts from '../src/game/contracts.js';
+import * as Crew from '../src/game/crew.js';
 import { v3, vsub, vnorm, vdist, qlook } from '../src/core/math.js';
 
 let pass = 0, fail = 0;
@@ -205,6 +207,75 @@ section('CHASE');
   ok('player hulls keep their full rating',
     me.stats.maxSpeed > runner.stats.maxSpeed,
     `${Math.round(me.stats.maxSpeed)} vs ${Math.round(runner.stats.maxSpeed)} m/s`);
+}
+
+/* --------------------------------------------------------------- sectors */
+section('SECTORS AND TRADE');
+{
+  const here = world.sector.id;
+  const homeMarket = world.station.market;
+  const goldHome = homeMarket.sellPrice('gold');
+  world.jumpTo('cinder');
+  ok('jumping rebuilds the sector', world.sector.id === 'cinder', world.sector.name);
+  ok('the player is carried through', world.ships.includes(player.ship));
+  const derelicts = world.ships.filter((s) => s.disabled && !s.dead).length;
+  ok('the reach is full of adrift hulls', derelicts >= 5, `${derelicts} adrift`);
+  const goldAway = world.station.market.sellPrice('gold');
+  ok('the two stations pay differently for ore', goldAway > goldHome * 1.2,
+    `${goldHome} vs ${goldAway} cr`);
+  ok('no shipyard at the scavenger yard', world.station.market.shipyard === false);
+  world.jumpTo(here);
+  ok('and back again', world.sector.id === here);
+}
+
+/* ------------------------------------------------------------- contracts */
+section('CONTRACTS');
+{
+  player.ship.cargo = {};                  // earlier sections left the hold full
+  const board = Contracts.rollBoard(world, player, 4);
+  ok('the board offers work', board.length === 4, `${board.length} jobs`);
+  ok('no two jobs read the same', new Set(board.map((c) => c.title)).size === board.length);
+  // the board is random, so ask for a supply job specifically
+  let supply = board.find((c) => c.type === 'supply');
+  for (let i = 0; i < 30 && !supply; i++) {
+    supply = Contracts.rollBoard(world, player, 4).find((c) => c.type === 'supply');
+  }
+  const r = Contracts.accept(player, supply, world);
+  ok('a contract can be accepted', r.ok, r.msg);
+  addCargo(player.ship, supply.item, supply.need);
+  const before = player.credits;
+  Contracts.onDock(player, world);
+  ok('delivering settles it on docking', player.credits > before,
+    `+${player.credits - before} cr`);
+  ok('and it leaves the active list', !player.contracts.some((c) => c.id === supply.id));
+}
+
+/* ------------------------------------------------------------------ crew */
+section('WINGMEN');
+{
+  player.credits = 200000;
+  const h = Crew.hire(player, 'wingShuttle', world);
+  ok('a pilot can be hired', h.ok, h.msg);
+  const wing = world.ships.find((s) => s.wing);
+  ok('the wingman is in the world', !!wing, wing?.name);
+  ok('and flies on your side', wing?.faction === 'player');
+  ok('your turrets will not shoot them', !world.isHostile(player.ship, wing));
+  ok('pirates will', world.isHostile(world.spawnPirate(), wing));
+
+  // with nothing to fight it should fly to the wing rather than wander off
+  for (const s of [...world.ships]) {
+    if (s.faction === 'pirate') world.ships.splice(world.ships.indexOf(s), 1);
+  }
+  world.grace = 120;
+  player.ship.pos = v3(0, 0, 0);
+  player.ship.vel = v3(0, 0, 0);
+  wing.pos = v3(900, 0, 900);
+  for (let i = 0; i < 60 * 25; i++) world.update(1 / 60);
+  const gap = vdist(wing.pos, player.ship.pos);
+  ok('it forms up on the player', gap < 400, `${Math.round(gap)}m off the wing`);
+
+  Crew.onWingLost(player, world, wing);
+  ok('a loss comes off the books', !player.crew.some((c) => c.name === wing.name));
 }
 
 /* ------------------------------------------------------------ simulation */

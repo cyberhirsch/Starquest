@@ -57,6 +57,7 @@ export function drawScene(batch, world, cam, opts = {}) {
   if (distOut > SECTOR_R * 0.72) drawBoundary(batch, eye, distOut, world.time);
 
   if (world.station) drawStation(batch, world.station, eye);
+  for (const g of world.gates || []) drawGate(batch, g, eye, world.time);
 
   for (const s of world.ships) {
     if (s === opts.hideShip) continue;
@@ -131,6 +132,28 @@ function drawStation(batch, st, eye) {
     vaddScaled(_e, _e, _d, Math.sin(ang) * 16);
     vaddScaled(_f, _e, _a, 8);
     batch.line3v(_e, _f, C.warn, 2.2, a * blink, 1.4);
+  }
+}
+
+function drawGate(batch, g, eye, time) {
+  const d = vdist(g.pos, eye);
+  const a = fade(d, 5000, 8000);
+  if (a <= 0) return;
+  batch.mesh(MODELS.gate, g.pos, g.quat, g.scale, C.station, 1.8, a, 1.1);
+  // the throat, pulsing so it reads as live from a distance
+  const pulse = 0.55 + 0.45 * Math.sin(time * 1.7);
+  const r = g.radius * g.scale * 0.55;
+  qright(_a, g.quat); qup(_b, g.quat);
+  const segs = 16;
+  let px = 0, py = 0, pz = 0;
+  for (let i = 0; i <= segs; i++) {
+    const ang = (i / segs) * Math.PI * 2;
+    const cx = Math.cos(ang) * r, cy = Math.sin(ang) * r;
+    const x = g.pos[0] + _a[0] * cx + _b[0] * cy;
+    const y = g.pos[1] + _a[1] * cx + _b[1] * cy;
+    const z = g.pos[2] + _a[2] * cx + _b[2] * cy;
+    if (i > 0) batch.line3(px, py, pz, x, y, z, [0.5, 0.8, 1], 2.4, a * pulse, 1.5);
+    px = x; py = y; pz = z;
   }
 }
 

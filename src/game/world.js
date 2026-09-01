@@ -5,6 +5,8 @@ import {
   vrandSphere, vcross, qid, qaxis, qmul, qnorm, qrot, qforward, qlook, clamp, lerp, rand, randi, pick,
 } from '../core/math.js';
 import { MODULES, ORES, TRADE, rollAsteroidType, SHIPS } from './data.js';
+import { SECTORS, START_SECTOR, sectorOf, arrivalGate } from './sectors.js';
+import { Market } from './station.js';
 import { ASTEROID_SHAPES, ASTEROID_SHAPES_LOW } from '../render/models.js';
 import { ORE_COLORS } from '../render/palette.js';
 import {
@@ -14,7 +16,6 @@ import {
 import { runAI } from './ai.js';
 
 export const SECTOR_R = 5200;
-const ASTEROID_COUNT = 190;
 
 class Grid {
   constructor(cell) { this.cell = cell; this.map = new Map(); }
@@ -59,6 +60,9 @@ export class World {
     this.rings = [];
     this.beams = [];
     this.station = null;
+    this.sector = null;
+    this.gates = [];
+    this.markets = {};              // one per station, kept between visits
     this.messages = [];
     this.grid = new Grid(420);
     this._near = [];
@@ -120,21 +124,88 @@ export class World {
 
   /* ------------------------------------------------------------- build -- */
 
-  generate() {
+  /** Build a sector from its definition. Everything else is sector-agnostic. */
+  generate(sectorId = START_SECTOR) {
+    const def = sectorOf(sectorId);
+    this.sector = def;
+    this.asteroidTarget = def.asteroids;
+
+    const st = def.station;
     this.station = {
-      kind: 'station', name: 'HALCYON DEPOT',
-      pos: v3(0, 0, -1400), quat: qid(), radius: 26, scale: 3.2,
+      kind: 'station', name: st.name, def: st,
+      pos: vcopy(v3(), st.pos), quat: qid(), radius: st.radius, scale: st.scale,
       spin: 0.06, dockRadius: 130,
+      market: this.markets[st.id] || (this.markets[st.id] = new Market(st)),
     };
-    // docking mouth sits on the station's -Z face
-    for (let i = 0; i < ASTEROID_COUNT; i++) this.spawnAsteroid();
+
+    this.gates = def.gates.map((g) => ({
+      kind: 'gate', to: g.to, name: `GATE — ${sectorOf(g.to).name}`,
+      pos: vcopy(v3(), g.pos), quat: qid(), radius: 14, scale: 3.4,
+      spin: 0.14,
+    }));
+
+    for (let i = 0; i < def.asteroids; i++) this.spawnAsteroid();
     this.spawnPirate(true);          // one, and it starts far away
-    for (let i = 0; i < 2; i++) this.spawnTrader();
-    this.spawnMiner(); this.spawnMiner();
+    for (let i = 0; i < Math.round(2 * def.traders); i++) this.spawnTrader();
+    for (let i = 0; i < def.miners; i++) this.spawnMiner();
+    for (let i = 0; i < def.derelicts; i++) this.spawnDerelict();
+  }
+
+  /** Clear the sector out, keeping the player's ship and anything flying with it. */
+  clear() {
+    const keep = this.ships.filter((s) => s.faction === 'player' && !s.dead);
+    this.ships = keep;
+    this.asteroids.length = 0;
+    this.projectiles.length = 0;
+    this.pods.length = 0;
+    this.particles.length = 0;
+    this.rings.length = 0;
+    this.beams.length = 0;
+    this.grace = 45;
+  }
+
+  /** Move everything player-side to a new sector and rebuild around it. */
+  jumpTo(sectorId) {
+    const from = this.sector?.id;
+    this.clear();
+    this.generate(sectorId);
+    const gate = arrivalGate(this.sector, from);
+    const here = vcopy(v3(), gate.pos);
+    for (const s of this.ships) {
+      if (s.faction !== 'player') continue;
+      vaddScaled(s.pos, here, vrandSphere(_a, 1), rand(140, 40));
+      vscale(s.vel, s.vel, 0.25);
+    }
+    this.log(`ARRIVED — ${this.sector.name}`, 'good');
+    this.log(this.sector.blurb, 'info');
+    return this.sector;
+  }
+
+  /** A hull that never made it home: adrift, powerless, and worth boarding. */
+  spawnDerelict() {
+    const cls = pick(['hauler', 'prospector', 'corsair', 'shuttle']);
+    const s = createShip(cls, 'civilian', {
+      pos: this.randomEdgePoint(v3()),
+      name: pick(['THE LONG SILENCE', 'ASHFALL', 'MOTHER OF SPARROWS', 'DEAD RECKONING',
+        'LAST TUESDAY', 'COLD COMFORT', 'NO SUCH LUCK']),
+      credits: Math.round(rand(5200, 400)),
+    });
+    for (let i = 0; i < 3; i++) {
+      const [id, n] = pick([['alloy', 30], ['cells', 22], ['meds', 14], ['gold', 18],
+        ['platinum', 10], ['contraband', 12], ['xenite', 8]]);
+      addCargo(s, id, randi(n) + 3);
+    }
+    s.disabled = true;
+    s.hull = s.stats.hullMax * rand(0.3, 0.08);
+    s.shield = 0;
+    vrandSphere(s.vel, rand(9, 1));
+    s.ai = null;
+    this.ships.push(s);
+    return s;
   }
 
   spawnAsteroid(opts = {}) {
-    const type = opts.type || rollAsteroidType();
+    const type = opts.type || rollAsteroidType(this.sector?.oreBias);
     const size = opts.size ?? rand(46, 12);
     const pos = opts.pos ? vcopy(v3(), opts.pos) : this.beltPoint(v3());
     const a = {
@@ -331,7 +402,7 @@ export class World {
     }
     if (by === this.player.ship) this.player.stats.rocks++;
     // keep the belt populated
-    if (this.asteroids.length < ASTEROID_COUNT) this.spawnAsteroid();
+    if (this.asteroids.length < (this.asteroidTarget ?? 190)) this.spawnAsteroid();
   }
 
   spawnPod(pos, vel, item, qty) {
@@ -431,6 +502,7 @@ export class World {
     for (const s of this.ships) if (!s.dead) check(s, s.radius);
     for (const a of this.asteroids) check(a, a.size);
     if (this.station) check(this.station, this.station.radius * this.station.scale);
+    for (const g of this.gates) check(g, g.radius * g.scale);
     return best;
   }
 
@@ -456,6 +528,7 @@ export class World {
       this.log(`UNLAWFUL KILL — BOUNTY ON YOU +${fine} CR`, 'danger');
     }
     this.onKill?.(ship);
+    this.onContractKill?.(ship);
   }
 
   /* ------------------------------------------------------------ update -- */
@@ -501,6 +574,10 @@ export class World {
       const q = qaxis(_qtmp, [0, 0, 1], this.station.spin * dt);
       qmul(this.station.quat, this.station.quat, q);
       qnorm(this.station.quat);
+    }
+    for (const g of this.gates) {
+      qmul(g.quat, g.quat, qaxis(_qtmp, [0, 0, 1], g.spin * dt));
+      qnorm(g.quat);
     }
 
     this.director(dt);
@@ -661,7 +738,8 @@ export class World {
     this.spawnTimer -= dt;
     this.traderTimer -= dt;
     const pirates = this.ships.filter((s) => s.faction === 'pirate' && !s.dead).length;
-    const want = this.grace > 0 ? 0 : 2 + Math.floor(this.player.threat);
+    const want = this.grace > 0 ? 0
+      : Math.round((2 + Math.floor(this.player.threat)) * (this.sector?.pirates ?? 1));
     if (this.spawnTimer <= 0) {
       this.spawnTimer = rand(26, 14);
       // early on they always arrive from a distance, so you see them coming
@@ -670,14 +748,15 @@ export class World {
     if (this.traderTimer <= 0) {
       this.traderTimer = rand(50, 25);
       const civ = this.ships.filter((s) => s.faction !== 'pirate' && s.faction !== 'security').length;
-      if (civ < 6) (Math.random() < 0.5 ? this.spawnTrader() : this.spawnMiner()).ai.t = 0;
+      const wantCiv = Math.round(6 * (this.sector?.traders ?? 1));
+      if (civ < wantCiv) (Math.random() < 0.5 ? this.spawnTrader() : this.spawnMiner()).ai.t = 0;
     }
     // the law turns up when you have a price on your head
     this.secTimer = (this.secTimer ?? 20) - dt;
     if (this.secTimer <= 0) {
       this.secTimer = 30;
       const sec = this.ships.filter((s) => s.faction === 'security' && !s.dead).length;
-      if (this.player.wanted > 1200 && sec < 2) this.spawnSecurity();
+      if (this.sector?.lawful && this.player.wanted > 1200 && sec < 2) this.spawnSecurity();
     }
   }
 }

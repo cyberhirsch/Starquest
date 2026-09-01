@@ -7,6 +7,8 @@ import {
   repair, repairCost, payFines,
 } from '../game/station.js';
 import { vdist, vlen, clamp } from '../core/math.js';
+import * as Contracts from '../game/contracts.js';
+import * as Crew from '../game/crew.js';
 import { boardBlocker, BOARD_RANGE } from '../game/boarding.js';
 
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -23,6 +25,7 @@ export class UI {
       wanted: document.getElementById('wanted'),
       wantedWrap: document.getElementById('wantedWrap'),
       shipName: document.getElementById('shipName'),
+      sectorName: document.getElementById('sectorName'),
       modeTag: document.getElementById('modeTag'),
       target: document.getElementById('targetPanel'),
       tgtName: document.getElementById('tgtName'),
@@ -72,7 +75,9 @@ export class UI {
     this.el.wanted.textContent = cr(player.wanted);
     this.el.wantedWrap.classList.toggle('hot', player.wanted > 0);
     this.el.shipName.textContent = ship.cls.name;
-    this.el.modeTag.textContent = player.mode === 'gunner' ? 'GUNNER' : 'PILOT';
+    if (world.sector) this.el.sectorName.textContent = world.sector.name;
+    this.el.modeTag.textContent = player.mode === 'gunner'
+      ? `GUNNER · ${g.autopilot || 'HOLD'}` : 'PILOT';
     this.el.speed.textContent = Math.round(vlen(ship.vel));
 
     // vitals: the number, not just a bar — dying should never be a surprise
@@ -119,6 +124,11 @@ export class UI {
         this.el.tgtInfo.textContent = ship.stats.scanner
           ? `${Math.round(t.ore)} UNITS · ${ITEMS[t.type.ore].name} · ${cr(t.ore * ITEMS[t.type.ore].price)} CR`
           : `${Math.round(t.size)}M ROCK`;
+      } else if (t.kind === 'gate') {
+        this.el.tgtName.textContent = t.name;
+        this.el.tgtHull.style.width = '100%';
+        this.el.tgtShield.style.width = '100%';
+        this.el.tgtInfo.textContent = 'JUMP GATE — FLY IN AND USE [ACT]';
       } else {
         this.el.tgtName.textContent = t.name || 'STATION';
         this.el.tgtHull.style.width = '100%';
@@ -143,7 +153,10 @@ export class UI {
     this._objId = card.id;
     this.el.objTitle.textContent = card.title;
     this.el.objBody.textContent = card.body;
-    this.el.objStep.textContent = card.complete ? '' : `${card.index + 1}/${card.total}`;
+    this.el.objStep.textContent = card.contract ? 'CONTRACT'
+      : card.complete ? '' : `${card.index + 1}/${card.total}`;
+    el.querySelector('[data-action="skiptut"]').classList.toggle('hidden', !!card.contract);
+    el.classList.toggle('contract', !!card.contract);
     el.classList.remove('fresh');
     void el.offsetWidth;                 // restart the entry animation
     el.classList.add('fresh');
@@ -174,7 +187,7 @@ export class UI {
   open(name, opts = {}) {
     this.screen = name;
     this.opts = opts;
-    if (name === 'station') this.tab = opts.tab || 'market';
+    if (name === 'station') this.tab = opts.tab || 'contracts';
     if (name === 'inventory') this.tab = opts.tab || 'loadout';
     this.overlay.classList.remove('hidden');
     this.render();
@@ -225,6 +238,14 @@ export class UI {
         this.log(`JETTISONED ${n} ${ITEMS[arg]?.name || arg}`, 'warn');
         this.render(); return;
       }
+      case 'takeJob': {
+        const c = (g.world.station.board || []).find((x) => x.id === arg);
+        if (c) say(Contracts.accept(player, c, g.world));
+        this.render(); return;
+      }
+      case 'dropJob': say(Contracts.abandon(player, arg)); this.render(); return;
+      case 'hire': say(Crew.hire(player, arg, g.world)); this.render(); return;
+      case 'fire': say(Crew.dismiss(player, arg, g.world)); this.render(); return;
       case 'sell': say(sellCargo(player, g.market, arg, +(arg2 || 1))); this.render(); return;
       case 'sellAll': say(sellAllOre(player, g.market)); this.render(); return;
       case 'buy': say(buyCargo(player, g.market, arg, +(arg2 || 1))); this.render(); return;
@@ -398,22 +419,84 @@ export class UI {
 
   renderStation() {
     const p = this.game.player;
-    const tabs = [['market', 'MARKET'], ['shipyard', 'SHIPYARD'], ['outfit', 'OUTFITTING'],
-      ['loadout', 'LOADOUT'], ['services', 'SERVICES']];
+    const tabs = [['contracts', 'CONTRACTS'], ['market', 'MARKET'], ['shipyard', 'SHIPYARD'],
+      ['crew', 'CREW'], ['outfit', 'OUTFITTING'], ['loadout', 'LOADOUT'], ['services', 'SERVICES']];
     return `<div class="screen">
-      <header><h2>HALCYON DEPOT</h2><div class="spacer"></div>
+      <header><h2>${esc(this.game.world.station?.name || 'DEPOT')}</h2><div class="spacer"></div>
         <div class="meta">CR <b>${cr(p.credits)}</b> · HOLD <b>${cargoUsed(p.ship)}/${p.ship.stats.cargoMax}</b></div>
         <button class="hbtn" data-do="undock">UNDOCK</button>
       </header>
       <div class="tabs">${tabs.map(([id, t]) =>
         `<button class="tab ${this.tab === id ? 'on' : ''}" data-do="tab" data-arg="${id}">${t}</button>`).join('')}</div>
       <div class="body">${{
+        contracts: () => this.contractsView(),
+        crew: () => this.crewView(),
         market: () => this.marketView(),
         shipyard: () => this.shipyardView(),
         outfit: () => this.outfitView(),
         loadout: () => this.loadoutView(),
         services: () => this.servicesView(),
       }[this.tab]()}</div></div>`;
+  }
+
+  contractsView() {
+    const g = this.game, p = g.player;
+    const board = (g.world.station.board || []).filter(
+      (c) => !p.contracts.some((a) => a.id === c.id));
+    const active = p.contracts;
+    const cr = (n) => Math.round(n).toLocaleString('en-US');
+
+    const progressOf = (c) => {
+      if (c.type === 'supply') return `${p.ship.cargo[c.item] || 0}/${c.need} IN THE HOLD`;
+      if (c.type === 'courier') return `${p.ship.cargo.crate || 0}/${c.units} CRATES ABOARD`;
+      return `${c.progress}/${c.need} DONE`;
+    };
+
+    return `<div class="cols">
+      <div class="section"><h3>ON OFFER</h3><div class="list">${board.length ? board.map((c) => `
+        <div class="item" data-do="takeJob" data-arg="${c.id}">
+          <span class="grow"><b>${esc(c.title)}</b><span class="sub">${esc(c.brief)}</span></span>
+          <span class="price">${cr(c.reward)} CR</span>
+        </div>`).join('') : '<div class="item empty">THE BOARD IS EMPTY — UNDOCK AND COME BACK</div>'}</div>
+        <p class="note">You can hold ${Contracts.MAX_ACTIVE} contracts at once. Courier freight is loaded
+        the moment you accept, so make room first.</p>
+      </div>
+      <div class="section"><h3>ACTIVE — ${active.length}/${Contracts.MAX_ACTIVE}</h3><div class="list">${
+        active.length ? active.map((c) => `
+        <div class="item on"><span class="grow"><b>${esc(c.title)}</b>
+          <span class="sub">${progressOf(c)}${c.type === 'courier' || c.type === 'supply'
+            ? ` · SETTLES ON DOCKING AT ${esc(c.type === 'courier' ? c.toName : Contracts.stationName(c.station))}` : ''}</span></span>
+          <span class="price">${cr(c.reward)}</span>
+          <button class="hbtn" data-do="dropJob" data-arg="${c.id}">DROP</button>
+        </div>`).join('') : '<div class="item empty">NOTHING ACCEPTED</div>'}</div>
+        <p class="note">Dropping a contract costs you standing with the Authority.</p>
+      </div></div>`;
+  }
+
+  crewView() {
+    const g = this.game, p = g.player;
+    const cr = (n) => Math.round(n).toLocaleString('en-US');
+    return `<div class="cols">
+      <div class="section"><h3>PILOTS FOR HIRE</h3><div class="list">${
+        Object.values(Crew.HIRES).map((h) => {
+          const afford = p.credits >= h.price && p.crew.length < Crew.MAX_CREW;
+          return `<div class="item ${afford ? '' : 'locked'}" ${afford ? `data-do="hire" data-arg="${h.id}"` : ''}>
+            <span class="grow"><b>${esc(h.name)}</b><span class="sub">${esc(h.blurb)}</span></span>
+            <span class="price">${cr(h.price)} CR</span></div>`;
+        }).join('')}</div>
+        <p class="note">A hired pilot flies their own hull, holds station off your wing, and breaks to
+        engage anything that threatens you. They keep up across jumps. If they are shot down, they are
+        gone — there is no insurance on other people.</p>
+      </div>
+      <div class="section"><h3>ON YOUR BOOKS — ${p.crew.length}/${Crew.MAX_CREW}</h3><div class="list">${
+        p.crew.length ? p.crew.map((c) => {
+          const ship = g.world.ships.find((s) => s.wing && s.name === c.name);
+          const hull = ship ? Math.round((ship.hull / ship.stats.hullMax) * 100) : 100;
+          return `<div class="item on"><span class="grow"><b>${esc(c.name)}</b>
+            <span class="sub">${esc(SHIPS[c.classId].name)} · HULL ${hull}%</span></span>
+            <button class="hbtn" data-do="fire" data-arg="${esc(c.name)}">PAY OFF</button></div>`;
+        }).join('') : '<div class="item empty">FLYING ALONE</div>'}</div>
+      </div></div>`;
   }
 
   marketView() {

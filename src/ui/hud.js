@@ -124,6 +124,16 @@ export function drawHUD(batch, g) {
     }
   }
 
+  /* jump gates ---------------------------------------------------------- */
+  for (const g of world.gates || []) {
+    if (project(_p, g.pos, cam.viewProj, W, H) && _p[0] > 0 && _p[0] < W && _p[1] > 0 && _p[1] < H) {
+      const r = 11 * u;
+      batch.circle2(_p[0], _p[1], r, [0.5, 0.8, 1], 1.4, 0.65, 1.0, 10);
+      batch.line2(_p[0] - r * 1.7, _p[1], _p[0] - r, _p[1], [0.5, 0.8, 1], 1.3, 0.55, 0.9);
+      batch.line2(_p[0] + r, _p[1], _p[0] + r * 1.7, _p[1], [0.5, 0.8, 1], 1.3, 0.55, 0.9);
+    }
+  }
+
   /* status arcs: hull left, shield right -------------------------------- */
   const s = ship.stats;
   const ay = g.touch ? H - 250 * u : H - 150 * u;

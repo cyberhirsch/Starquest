@@ -74,6 +74,16 @@ const scenarios = [
     player.ship.pos = [...world.station.pos];
     player.ship.vel = [0, 0, 0];
   }],
+  ['at a jump gate', () => {
+    player.ship.pos = [...world.gates[0].pos];
+    player.ship.vel = [0, 0, 0];
+    player.target = world.gates[0];
+  }],
+  ['in the wreck graveyard', () => {
+    world.jumpTo('cinder');
+    player.ship.vel = [0, 0, 0];
+    player.target = world.ships.find((s) => s.disabled) || null;
+  }],
   ['zero velocity, zero throttle', () => {
     player.ship.vel = [0, 0, 0];
     player.ship.throttle = 0;

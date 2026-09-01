@@ -325,3 +325,6 @@ body.flat .flickering { animation: none; }
 body.flat #objective.fresh { animation: none; }
 body.flat #prompt { animation: none; }
 body.flat #vitals.critical { animation: none; }
+
+#objective.contract { border-color: rgba(108, 255, 159, 0.45); }
+#objective.contract b { color: var(--green); text-shadow: 0 0 12px rgba(108, 255, 159, 0.5); }

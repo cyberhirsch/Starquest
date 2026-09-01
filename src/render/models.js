@@ -280,6 +280,35 @@ function sphereWire(rings = 5, segs = 10) {
   return b.build();
 }
 
+/** Jump gate: a ring you fly through, big enough to see from a long way off. */
+function gate() {
+  const b = mb();
+  const N = 12;
+  const inner = [], outer = [];
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    inner.push(b.vert(Math.cos(a) * 8, Math.sin(a) * 8, 0));
+    outer.push(b.vert(Math.cos(a) * 10, Math.sin(a) * 10, 0));
+  }
+  b.loop(inner); b.loop(outer); b.connect(inner, outer);
+  // depth ring, so it reads as a throat rather than a flat hoop
+  const back = [];
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    back.push(b.vert(Math.cos(a) * 9, Math.sin(a) * 9, -2.4));
+  }
+  b.loop(back);
+  for (let i = 0; i < N; i += 2) b.edge(outer[i], back[i]);
+  // pylons
+  for (let i = 0; i < N; i += 3) {
+    const a = (i / N) * Math.PI * 2;
+    const tip = b.vert(Math.cos(a) * 13.5, Math.sin(a) * 13.5, -1.2);
+    b.edge(outer[i], tip);
+    b.edge(back[i], tip);
+  }
+  return b.build();
+}
+
 function pod() {
   const b = mb();
   const a = b.ring(-1.0, 0.7, 0.7, 0, 4), c = b.ring(1.0, 0.7, 0.7, 0, 4);
@@ -310,6 +339,7 @@ export const MODELS = {
   sentinel: sentinel(),
   station: station(),
   pod: pod(),
+  gate: gate(),
   missile: missile(),
   buoy: buoy(),
   planet: sphereWire(6, 12),

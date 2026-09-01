@@ -11,12 +11,15 @@ import { setupMobile, registerServiceWorker } from './ui/mobile.js';
 import { World, SECTOR_R } from './game/world.js';
 import { Player } from './game/player.js';
 import { Tutorial } from './game/tutorial.js';
-import { Market } from './game/station.js';
+import * as Contracts from './game/contracts.js';
+import * as Crew from './game/crew.js';
+import { steer, steerTo } from './game/ai.js';
+
 import { Boarding, boardBlocker, BOARD_RANGE, BOARD_SPEED } from './game/boarding.js';
 import { MODULES } from './game/data.js';
 import {
   v3, m4, m4perspective, m4view, m4mul, qid, qaxis, qmul, qnorm, qcopy, qforward, qright, qup,
-  qrot, vcopy, vset, vadd, vsub, vscale, vaddScaled, vlen, vdist, vnorm, clamp, lerp, rand,
+  qrot, vcopy, vset, vadd, vsub, vscale, vaddScaled, vcross, vlen, vdist, vnorm, clamp, lerp, rand,
 } from './core/math.js';
 import { flyShip, fireMount, mountWorldPos, recalc, cargoUsed, addCargo } from './game/ship.js';
 
@@ -43,11 +46,11 @@ async function start() {
   const batch = new LineBatch(70000);
   const restored = Player.load();
   const player = restored || new Player();
-  const market = new Market();
   const world = new World(player);
 
   const game = {
-    player, world, market, renderer, audio,
+    player, world, renderer, audio,
+    get market() { return world.station?.market; },
     boarding: null,
     paused: false,
     promptText: '',
@@ -92,6 +95,10 @@ async function start() {
     ui.log('GRAPHICS CONTEXT RESTORED', 'good');
   };
 
+  world.onWingLost = (ship) => Crew.onWingLost(player, world, ship);
+  world.onContractKill = (ship) => Contracts.onKill(player, world, ship);
+  world.onContractBoard = (ship) => Contracts.onBoard(player, world, ship);
+
   world.onPlayerDamage = (hit) => {
     const frac = hit.amount / Math.max(1, player.ship.stats.hullMax);
     ui.flashDamage(0.2 + frac * 2.4);
@@ -105,9 +112,10 @@ async function start() {
     world.pods.length = 0;
     world.particles.length = 0;
     world.rings.length = 0;
-    world.generate();
+    world.generate(player.sector);
     player.buildShip(world);
     if (player._cargo) { player.ship.cargo = player._cargo; player._cargo = null; }
+    Crew.syncCrew(player, world);
     vset(player.ship.pos, 0, 0, -1050);
     qcopy(player.ship.quat, qid());
     vset(player.ship.vel, 0, 0, 0);
@@ -139,7 +147,35 @@ async function start() {
     return 'DOCK';
   }
 
+  /** Nearest gate you are inside the throat of, if any. */
+  function gateCheck() {
+    for (const g of world.gates) {
+      if (vdist(player.ship.pos, g.pos) < 62) {
+        if (vlen(player.ship.vel) > 150) return { gate: g, blocked: 'SLOW DOWN TO JUMP' };
+        return { gate: g };
+      }
+    }
+    return null;
+  }
+
+  function jumpThrough(gate) {
+    player.save();
+    world.jumpTo(gate.to);
+    player.sector = gate.to;
+    Crew.syncCrew(player, world);
+    player.target = null;
+    game.shake = 1.2;
+    audio.dock();
+    player.save();
+  }
+
   function doAction() {
+    const gate = gateCheck();
+    if (gate) {
+      if (gate.blocked) { ui.log(gate.blocked, 'warn'); return; }
+      jumpThrough(gate.gate);
+      return;
+    }
     const dock = dockCheck();
     if (dock === 'DOCK') return dockAtStation();
     if (dock) { ui.log(dock, 'warn'); return; }
@@ -162,9 +198,11 @@ async function start() {
     player.ship.throttle = 0;
     input.throttle = 0;
     player.stats.docked++;
+    Contracts.onDock(player, world);
+    world.station.board = Contracts.rollBoard(world, player);
     player.save();
     audio.dock();
-    market.roll();
+    world.station.market.roll();
     ui.open('station');
     ui.log('DOCKING CLAMPS ENGAGED', 'good');
   }
@@ -302,6 +340,31 @@ async function start() {
     } else if (before < m.energy && Math.random() < 0.04) audio.beep(false);
   }
 
+  /** Nobody is at the helm in the gunner's seat, so the helm flies itself. */
+  function autopilot(ship, control, dt) {
+    const t = player.target;
+    if (t && !t.dead && t !== ship) {
+      const range = t.kind === 'ship' ? 430 : 260;
+      vsub(_tmp, t.pos, ship.pos);
+      const dist = vlen(_tmp);
+      vnorm(_tmp, _tmp);
+      if (dist < range * 1.5) {          // arc past rather than ram
+        const side = vcross(v3(), _tmp, [0, 1, 0]);
+        vnorm(side, side);
+        vaddScaled(_tmp, _tmp, side, 0.8);
+        vnorm(_tmp, _tmp);
+      }
+      steer(ship, _tmp, control, 1.5);
+      control.throttle = dist > range ? 0.75 : dist < range * 0.6 ? -0.2 : 0.1;
+      game.autopilot = `ORBIT ${t.name || 'TARGET'}`;
+    } else {
+      // no lock: hold whatever heading and throttle the pilot left it on
+      control.pitch = 0; control.yaw = 0;
+      control.throttle = ship.throttle;
+      game.autopilot = 'HOLD COURSE';
+    }
+  }
+
   function updateCamera() {
     const ship = player.ship;
     if (player.mode === 'gunner') {
@@ -364,6 +427,7 @@ async function start() {
     } else {
       control.roll = input.roll * 0.35;
       updateGunnerAim(dt);
+      autopilot(ship, control, dt);
     }
     ship.assist = player.assist;
     flyShip(ship, control, dt);
@@ -390,8 +454,13 @@ async function start() {
     }
 
     // contextual prompt
+    const gate = gateCheck();
     const dock = dockCheck();
-    if (dock === 'DOCK') game.promptText = 'DOCKING RANGE — [ACT] TO DOCK';
+    if (gate) {
+      game.promptText = gate.blocked
+        ? gate.blocked
+        : `JUMP TO ${gate.gate.to.toUpperCase()} — [ACT]`;
+    } else if (dock === 'DOCK') game.promptText = 'DOCKING RANGE — [ACT] TO DOCK';
     else if (dock) game.promptText = dock;
     else {
       const t = player.target;
@@ -401,7 +470,7 @@ async function start() {
       } else game.promptText = '';
     }
 
-    const card = tutorial.update(game, dt);
+    const card = tutorial.update(game, dt) || Contracts.tracked(player, world);
     ui.setObjective(card);
     if (card?.complete) setTimeout(() => ui.setObjective(null), 6000);
 
@@ -490,6 +559,8 @@ async function start() {
   registerServiceWorker();
   addEventListener('beforeunload', () => player.save());
 
+  game.Contracts = Contracts;
+  game.Crew = Crew;
   game.classes = { Boarding };          // handy from the console
   game.batch = batch;
   window.STARQUEST = game;
