@@ -77,7 +77,10 @@ void main() {
   float a = vColor.a;
   vec3 c = vColor.rgb * (core + halo) * vGlow * a;
   c += vec3(1.0) * pow(core, 3.0) * 0.55 * a * vGlow;
-  fragColor = vec4(c, 1.0);
+  // never emit NaN or negatives into the HDR target — either would survive the
+  // bloom chain and tone-map to a black block
+  if (any(isnan(c))) c = vec3(0.0);
+  fragColor = vec4(max(c, vec3(0.0)), 1.0);
 }`;
 
 export const FULLSCREEN_VS = `#version 300 es
@@ -172,5 +175,6 @@ void main() {
   float n = fract(sin(dot(uv * uTime, vec2(12.9898, 78.233))) * 43758.5453);
   c += (n - 0.5) * 0.020 * uCrt;
 
-  fragColor = vec4(c, 1.0);
+  if (any(isnan(c))) c = vec3(0.0);
+  fragColor = vec4(clamp(c, vec3(0.0), vec3(1.0)), 1.0);
 }`;

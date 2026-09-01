@@ -6,6 +6,7 @@ import {
 } from '../core/math.js';
 import { MODULES, ORES, TRADE, rollAsteroidType, SHIPS } from './data.js';
 import { ASTEROID_SHAPES, ASTEROID_SHAPES_LOW } from '../render/models.js';
+import { ORE_COLORS } from '../render/palette.js';
 import {
   createShip, flyShip, regen, updateTurrets, damageShip, destroyShip, disableShip,
   addCargo, cargoFree, recalc,
@@ -285,7 +286,7 @@ export class World {
     const bonus = ship.stats?.miningBonus ?? 1;
     a.hp -= module.dmg * dt * 6 * bonus;
     a.flash = 1;
-    if (Math.random() < 0.35) this.sparks(point, 1, 3, a.type.color);
+    if (Math.random() < 0.35) this.sparks(point, 1, 3, ORE_COLORS[a.type.ore]);
     // steady trickle straight into the hold
     const gain = module.dmg * dt * 0.045 * (module.oreMul || 1) * a.type.yieldMul * bonus;
     if (ship === this.player.ship) {
@@ -309,7 +310,7 @@ export class World {
   breakAsteroid(a, by) {
     const i = this.asteroids.indexOf(a);
     if (i >= 0) this.asteroids.splice(i, 1);
-    this.explode(a.pos, a.vel, a.size * 1.6, 0.5, a.type.color);
+    this.explode(a.pos, a.vel, a.size * 1.6, 0.5, ORE_COLORS[a.type.ore]);
     const drops = Math.max(1, Math.round(a.ore * 0.5));
     let left = drops;
     while (left > 0) {
@@ -551,7 +552,7 @@ export class World {
         } else {
           hit.hp -= p.dmg * (p.oreMul > 1 ? p.oreMul * 0.4 : 1);
           hit.flash = 1;
-          this.sparks(hitPoint, 2, 2.5, hit.type.color);
+          this.sparks(hitPoint, 2, 2.5, ORE_COLORS[hit.type.ore]);
           if (p.owner === this.player.ship && p.oreMul > 1) {
             const key = hit.type.ore;
             this.oreAccum[key] = (this.oreAccum[key] || 0) + p.dmg * 0.02 * p.oreMul;

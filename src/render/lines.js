@@ -10,12 +10,13 @@ export class LineBatch {
     this.capacity = capacity;
     this.data = new Float32Array(capacity * STRIDE);
     this.count = 0;
+    this.rejected = 0;
     this._v = new Float32Array(3 * 512);   // scratch for transformed verts
     this._q = [0, 0, 0, 1];
     this._p = [0, 0, 0];
   }
 
-  reset() { this.count = 0; }
+  reset() { this.count = 0; this.rejected = 0; }
 
   get byteLength() { return this.count * STRIDE * 4; }
 
@@ -24,8 +25,18 @@ export class LineBatch {
     return this.count++ * STRIDE;
   }
 
-  /** World-space segment. */
+  /** World-space segment. Non-finite input is dropped rather than drawn: a NaN
+   *  reaching the HDR target poisons the pixel and the tone map renders it as a
+   *  black rectangle, which no amount of additive blending should be able to do. */
   line3(ax, ay, az, bx, by, bz, col, thick = 1.6, alpha = 1, glow = 1) {
+    if (!(Number.isFinite(ax) && Number.isFinite(ay) && Number.isFinite(az)
+       && Number.isFinite(bx) && Number.isFinite(by) && Number.isFinite(bz)
+       && Number.isFinite(alpha) && Number.isFinite(glow) && Number.isFinite(thick)
+       && Number.isFinite(col[0]) && Number.isFinite(col[1]) && Number.isFinite(col[2]))) {
+      this.rejected++;
+      return;
+    }
+    if (alpha <= 0 || glow <= 0) return;
     const i = this._slot();
     if (i < 0) return;
     const d = this.data;
@@ -41,6 +52,13 @@ export class LineBatch {
 
   /** Screen-space segment, in CSS-independent device pixels. */
   line2(ax, ay, bx, by, col, thick = 1.6, alpha = 1, glow = 1) {
+    if (!(Number.isFinite(ax) && Number.isFinite(ay) && Number.isFinite(bx) && Number.isFinite(by)
+       && Number.isFinite(alpha) && Number.isFinite(glow) && Number.isFinite(thick)
+       && Number.isFinite(col[0]) && Number.isFinite(col[1]) && Number.isFinite(col[2]))) {
+      this.rejected++;
+      return;
+    }
+    if (alpha <= 0 || glow <= 0) return;
     const i = this._slot();
     if (i < 0) return;
     const d = this.data;

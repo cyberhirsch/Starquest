@@ -83,7 +83,10 @@ fn fs(in : VSOut) -> @location(0) vec4<f32> {
   let a    = in.color.a;
   var c    = in.color.rgb * (core + halo) * in.glow * a;
   c += vec3<f32>(1.0, 1.0, 1.0) * pow(core, 3.0) * 0.55 * a * in.glow;
-  return vec4<f32>(c, 1.0);
+  // never emit NaN or negatives into the HDR target — either would survive the
+  // bloom chain and tone-map to a black block
+  c = select(vec3<f32>(0.0), c, c == c);
+  return vec4<f32>(max(c, vec3<f32>(0.0)), 1.0);
 }
 `;
 
@@ -188,6 +191,7 @@ fn fs(@location(0) uv0 : vec2<f32>) -> @location(0) vec4<f32> {
   let n = fract(sin(dot(uv * p.args.x, vec2<f32>(12.9898, 78.233))) * 43758.5453);
   c += (n - 0.5) * 0.020 * crt;
 
-  return vec4<f32>(c, 1.0);
+  c = select(vec3<f32>(0.0), c, c == c);
+  return vec4<f32>(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
 `;

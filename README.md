@@ -113,6 +113,7 @@ src/
     audio.js          WebAudio synth (no samples)  style.css
 tools/                icon and service-worker generators
 test/integration.mjs  headless play-through of every system
+test/render.mjs       draws real frames, fails on non-finite geometry
 ```
 
 ## How the vector look works

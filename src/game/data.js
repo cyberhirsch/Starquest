@@ -148,13 +148,14 @@ export const itemPrice = (id) => ITEMS[id]?.price ?? 0;
 export const isModule = (id) => !!MODULES[id];
 
 /** Ore an asteroid class yields, with rarity weights. */
+/** `ore` keys into ORE_COLORS for rendering — do not store a colour here. */
 export const ASTEROID_TYPES = [
-  { ore: 'iron', weight: 34, color: 'iron', yieldMul: 1.0 },
-  { ore: 'ice', weight: 22, color: 'ice', yieldMul: 1.3 },
-  { ore: 'silicon', weight: 20, color: 'silicon', yieldMul: 1.0 },
-  { ore: 'gold', weight: 12, color: 'gold', yieldMul: 0.7 },
-  { ore: 'platinum', weight: 8, color: 'platinum', yieldMul: 0.55 },
-  { ore: 'xenite', weight: 4, color: 'xenite', yieldMul: 0.4 },
+  { ore: 'iron', weight: 34, yieldMul: 1.0 },
+  { ore: 'ice', weight: 22, yieldMul: 1.3 },
+  { ore: 'silicon', weight: 20, yieldMul: 1.0 },
+  { ore: 'gold', weight: 12, yieldMul: 0.7 },
+  { ore: 'platinum', weight: 8, yieldMul: 0.55 },
+  { ore: 'xenite', weight: 4, yieldMul: 0.4 },
 ];
 
 export function rollAsteroidType() {

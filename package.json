@@ -7,10 +7,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/integration.mjs",
+    "test": "node test/integration.mjs && node test/render.mjs",
     "icons": "node tools/make-icons.mjs",
     "sw": "node tools/make-sw.mjs",
-    "test:browser": "node test/browser.mjs"
+    "test:browser": "node test/browser.mjs",
+    "test:render": "node test/render.mjs"
   },
   "keywords": [
     "webgpu",
