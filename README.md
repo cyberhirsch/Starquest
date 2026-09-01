@@ -18,8 +18,16 @@ and a 60-line static server. Add `?gfx=webgl` or `?gfx=webgpu` to force a backen
 
 ## Install on a phone
 
-Serve the folder over HTTPS (GitHub Pages, Netlify, any static host) and open it on
-the device.
+The repository ships a GitHub Pages workflow (`.github/workflows/pages.yml`) that
+publishes `main` on every push, after the test suite passes. Pages has to be turned
+on once by hand — **Settings → Pages → Build and deployment → Source: GitHub
+Actions** — because a workflow token is not allowed to enable it. After that, re-run
+the workflow and the game is live at `https://<user>.github.io/<repo>/`.
+
+Any HTTPS static host works just as well; every path in the project is relative, so
+a repository subpath needs no configuration.
+
+Open the URL on the device.
 
 - **Android / Chrome** — tap **INSTALL** on the flight deck, or *⋮ → Install app*.
   It launches fullscreen, landscape-locked, and runs offline.

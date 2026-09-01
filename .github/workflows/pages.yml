@@ -39,13 +39,12 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+    # One-time setup: repository Settings -> Pages -> Build and deployment ->
+    # Source: "GitHub Actions". The workflow token is not allowed to switch that
+    # on itself. Everything here is path-relative, so no base-URL configuration
+    # is needed and the site works from a repository subpath.
     steps:
       - uses: actions/checkout@v4
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          # turns Pages on for the repo if it is not enabled yet
-          enablement: true
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
