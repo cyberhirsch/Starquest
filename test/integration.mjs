@@ -41,8 +41,11 @@ section('FLIGHT');
 section('MINING');
 {
   const s = player.ship;
-  player.install('mining1', 'hardpoint', 0);
-  ok('mining laser fitted', s.hardpoints[0].moduleId === 'mining1');
+  // the shuttle now leaves the yard with a cannon and a cutter already fitted
+  const beamIdx = s.hardpoints.findIndex((h) => MODULES[h.moduleId]?.beam);
+  ok('mining laser fitted from the start', beamIdx >= 0,
+    s.hardpoints.map((h) => h.moduleId).join(' + '));
+  const beam = s.hardpoints[beamIdx >= 0 ? beamIdx : 0];
   const rock = world.asteroids[0];
   rock.pos = v3(0, 0, -200); rock.vel = v3(0, 0, 0);
   s.pos = v3(0, 0, 0); s.vel = v3(0, 0, 0);
@@ -51,7 +54,7 @@ section('MINING');
   const hp0 = rock.hp;
   for (let i = 0; i < 240; i++) {
     s.energy = s.stats.energyMax;
-    fireMount(s, s.hardpoints[0], [0, 0, -1], world);
+    fireMount(s, beam, [0, 0, -1], world);
     world.update(1 / 60);
   }
   ok('beam damages the rock', rock.hp < hp0 || !world.asteroids.includes(rock),
@@ -63,8 +66,9 @@ section('MINING');
 section('COMBAT');
 {
   const s = player.ship;
-  player.addModule('pulse');
-  player.install('pulse', 'hardpoint', 0);
+  const gunIdx = s.hardpoints.findIndex((h) => MODULES[h.moduleId] && !MODULES[h.moduleId].beam);
+  const gun = s.hardpoints[gunIdx];
+  ok('a cannon is fitted from the start', !!gun);
   const pirate = world.spawnPirate();
   pirate.pos = v3(0, 0, -300); pirate.vel = v3(0, 0, 0);
   s.pos = v3(0, 0, 0); s.vel = v3(0, 0, 0);
@@ -72,8 +76,8 @@ section('COMBAT');
   const hull0 = pirate.hull + pirate.shield;
   for (let i = 0; i < 400 && !pirate.dead; i++) {
     s.energy = s.stats.energyMax;
-    s.hardpoints[0].cd = 0;
-    fireMount(s, s.hardpoints[0], vnorm(v3(), vsub(v3(), pirate.pos, s.pos)), world, pirate);
+    gun.cd = 0;
+    fireMount(s, gun, vnorm(v3(), vsub(v3(), pirate.pos, s.pos)), world, pirate);
     world.update(1 / 60);
     pirate.vel = v3(0, 0, 0);
     pirate.pos = v3(0, 0, -300);

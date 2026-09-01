@@ -8,16 +8,21 @@ const SAVE_KEY = 'starquest.save.v1';
 
 const STARTER = {
   classId: 'shuttle',
-  loadout: { hardpoints: ['pulse'], utility: ['mining1' /* stowed */, null] },
+  loadout: { hardpoints: ['pulse', 'mining1'], utility: ['tractor', null] },
 };
 
 export class Player {
   constructor() {
     this.credits = 4500;
     this.wanted = 0;
-    this.hangar = [{ classId: 'shuttle', loadout: { hardpoints: ['pulse'], utility: [null, null] } }];
+    this.hangar = [{
+      classId: 'shuttle',
+      loadout: { hardpoints: ['pulse', 'mining1'], utility: ['tractor', null] },
+    }];
     this.active = 0;
-    this.storage = { mining1: 1, tractor: 1 };     // modules owned but not fitted
+    this.storage = {};                              // modules owned but not fitted
+    this.tutorial = { step: 0, done: false };
+    this.lastSaved = 0;
     this.stats = { kills: 0, mined: 0, rocks: 0, boarded: 0, earned: 0, docked: 0 };
     this.vouchers = {};                             // classId -> discount claims from boarding
     this.mode = 'pilot';                            // 'pilot' | 'gunner'
@@ -107,12 +112,20 @@ export class Player {
       v: 1, credits: this.credits, wanted: this.wanted, hangar: this.hangar,
       active: this.active, storage: this.storage, stats: this.stats,
       vouchers: this.vouchers, cargo: this.ship ? this.ship.cargo : {},
+      tutorial: this.tutorial,
     };
   }
 
   save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.serialize())); return true; }
-    catch { return false; }
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(this.serialize()));
+      this.lastSaved = Date.now();
+      return true;
+    } catch { return false; }
+  }
+
+  static hasSave() {
+    try { return !!localStorage.getItem(SAVE_KEY); } catch { return false; }
   }
 
   static load() {
@@ -129,7 +142,9 @@ export class Player {
       p.storage = d.storage || {};
       p.stats = { ...p.stats, ...(d.stats || {}) };
       p.vouchers = d.vouchers || {};
+      p.tutorial = d.tutorial || { step: 0, done: false };
       p._cargo = d.cargo || {};
+      p.lastSaved = Date.now();
       return p;
     } catch { return null; }
   }

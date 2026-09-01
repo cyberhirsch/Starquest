@@ -49,13 +49,28 @@ cycles contacts, `ACT` docks or boards, `INV` opens the loadout.
 `Tab` inventory · `1`–`6` pick which mount you are manning · `G` flight assist ·
 `M` manual.
 
+## Getting started
+
+A short tutorial walks the first flight — throttle, steering, locking a rock, cutting
+ore, scooping pods, docking, selling, and fitting your first auto-turret. It shows one
+objective at a time and can be skipped from the card or the manual.
+
+The game saves itself every 30 seconds, when you dock, when a tutorial step completes,
+and whenever the page is hidden or closed — so swiping the app away does not cost you
+progress. `SAVE NOW` and `RELOAD LAST SAVE` live in the manual (`M`, or the flight
+manual button).
+
 ## The belt
 
 - **Mine.** Fit a mining laser and cut rocks apart. Ore trickles straight into the
   hold while you cut; a rock that breaks scatters cargo pods and smaller rocks. Ore
   type is visible in the colour of the wireframe.
 - **Fight.** Pirates hunt the belt. Shoot a licensed hull and the Authority prices
-  your head; kill a pirate and you are paid a bounty.
+  your head; kill a pirate and you are paid a bounty. The HUD names whoever is
+  shooting you and marks their bearing on a ring around the reticle, and hull and
+  shield are always on screen as numbers — nothing kills you silently. New pilots
+  take reduced damage until they have some standing, and the belt stays quiet for
+  the first minute.
 - **Board.** Ion weapons and heavy damage leave hulls adrift instead of scattering
   them. Carry a breaching rig, match velocity, and cut your way in — three clean
   charges strips the hold and files a claim on the hull worth half price at the yard.
@@ -64,7 +79,7 @@ cycles contacts, `ACT` docks or boards, `INV` opens the loadout.
 - **Grow.** A Vex Shuttle has one mount. A Bastion has six. Auto-turrets acquire,
   lead and fire on their own while you fly — the only way a big hull earns its price.
 
-Progress saves to `localStorage` on docking and on exit.
+Progress lives in `localStorage`.
 
 ## Layout
 

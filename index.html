@@ -29,6 +29,12 @@
     <div class="stat right"><span id="shipName">VEX SHUTTLE</span><b id="modeTag">PILOT</b></div>
   </div>
 
+  <div id="objective" class="panel hidden">
+    <div class="objhead"><b id="objTitle"></b><i id="objStep"></i></div>
+    <p id="objBody"></p>
+    <button class="hbtn" data-action="skiptut">SKIP TUTORIAL</button>
+  </div>
+
   <div id="targetPanel" class="panel hidden">
     <div class="row"><b id="tgtName">—</b><i id="tgtDist">0 M</i></div>
     <div class="bars">
@@ -36,6 +42,11 @@
       <div class="bar"><i>SHLD</i><u><s id="tgtShield"></s></u></div>
     </div>
     <div class="row small"><span id="tgtInfo"></span></div>
+  </div>
+
+  <div id="vitals" class="panel">
+    <div class="vrow"><i>HULL</i><u><s id="hullBar"></s></u><b id="hullVal">0</b></div>
+    <div class="vrow"><i>SHLD</i><u><s id="shieldBar"></s></u><b id="shieldVal">0</b></div>
   </div>
 
   <div id="weapons" class="panel"></div>
@@ -64,6 +75,8 @@
     <div id="stickBase"><div id="stickKnob"></div></div>
   </div>
 </div>
+
+<div id="hitFlash"></div>
 
 <div id="rotateHint" class="hidden"><div><b>ROTATE TO LANDSCAPE</b><span>THE COCKPIT IS WIDER THAN IT IS TALL — TAP TO DISMISS</span></div></div>
 

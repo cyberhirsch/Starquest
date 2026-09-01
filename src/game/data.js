@@ -3,9 +3,9 @@
 export const SHIPS = {
   shuttle: {
     id: 'shuttle', name: 'VEX SHUTTLE', model: 'shuttle', scale: 1.0, radius: 4,
-    mass: 12, thrust: 34, reverse: 0.55, turn: 2.1, hull: 120, shield: 60, shieldRate: 6,
-    cargo: 20, hardpoints: 1, utility: 2, energy: 90, energyRate: 22, price: 0,
-    blurb: 'Civilian runabout. One gun, a cupboard for cargo, and enough thrust to run away.',
+    mass: 12, thrust: 34, reverse: 0.55, turn: 2.1, hull: 200, shield: 90, shieldRate: 9,
+    cargo: 30, hardpoints: 2, utility: 2, energy: 110, energyRate: 26, price: 0,
+    blurb: 'Civilian runabout. Two mounts, a cupboard for cargo, and enough thrust to run away.',
   },
   prospector: {
     id: 'prospector', name: 'PROSPECTOR', model: 'prospector', scale: 1.1, radius: 5.5,

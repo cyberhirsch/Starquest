@@ -10,6 +10,7 @@ import { Audio } from './ui/audio.js';
 import { setupMobile, registerServiceWorker } from './ui/mobile.js';
 import { World, SECTOR_R } from './game/world.js';
 import { Player } from './game/player.js';
+import { Tutorial } from './game/tutorial.js';
 import { Market } from './game/station.js';
 import { Boarding, boardBlocker, BOARD_RANGE, BOARD_SPEED } from './game/boarding.js';
 import { MODULES } from './game/data.js';
@@ -40,7 +41,8 @@ async function start() {
 
   const audio = new Audio();
   const batch = new LineBatch(70000);
-  const player = Player.load() || new Player();
+  const restored = Player.load();
+  const player = restored || new Player();
   const market = new Market();
   const world = new World(player);
 
@@ -59,6 +61,8 @@ async function start() {
     newGame() { newGame(); },
   };
 
+  const tutorial = new Tutorial(player);
+  game.tutorial = tutorial;
   const ui = new UI(document.body, game);
   const input = createInput(canvas, document.body);
   const mobile = setupMobile(game, renderer, canvas, input);
@@ -68,6 +72,12 @@ async function start() {
   world.onLog = (text, kind) => {
     ui.log(text, kind);
     if (kind === 'danger') audio.alarm();
+  };
+
+  world.onPlayerDamage = (hit) => {
+    const frac = hit.amount / Math.max(1, player.ship.stats.hullMax);
+    ui.flashDamage(0.2 + frac * 2.4);
+    mobile.buzz(Math.min(70, 15 + hit.amount));
   };
 
   function fresh() {
@@ -87,6 +97,7 @@ async function start() {
   fresh();
 
   ui.log(`HALCYON BELT — VECTOR FLIGHT SYSTEM ONLINE (${renderer.backend.toUpperCase()})`, 'good');
+  if (restored) ui.log('FLIGHT LOG RESTORED', 'good');
   ui.log(mobile.isTouch ? 'TAP THE MANUAL BUTTON FOR CONTROLS' : 'PRESS M FOR THE FLIGHT MANUAL', 'info');
 
   /* ------------------------------------------------------------ actions */
@@ -195,11 +206,18 @@ async function start() {
       }
       if (ui.isOpen) {
         // while an overlay is up, only a few keys pass through
+        if (ev === 'skiptut') { tutorial.skip(); ui.setObjective(null); continue; }
         if (ev === 'inventory' || ev === 'map') { if (game.boarding) continue; ui.close(); }
         else if (ev === 'action' && game.boarding?.stage === 'breach') { game.boarding.strike(); ui.render(); }
         continue;
       }
       switch (ev) {
+        case 'skiptut':
+          tutorial.skip();
+          ui.setObjective(null);
+          player.save();
+          ui.log('TUTORIAL SKIPPED — SEE THE MANUAL ANY TIME', 'info');
+          break;
         case 'inventory': ui.open('inventory'); break;
         case 'map': ui.open('menu'); break;
         case 'mode': toggleMode(); break;
@@ -365,8 +383,30 @@ async function start() {
       } else game.promptText = '';
     }
 
+    const card = tutorial.update(game, dt);
+    ui.setObjective(card);
+    if (card?.complete) setTimeout(() => ui.setObjective(null), 6000);
+
+    autosave(dt);
     ui.update(game);
   }
+
+  /* --------------------------------------------------------------- saving */
+
+  let saveTimer = 30;
+  function autosave(dt) {
+    saveTimer -= dt;
+    if (saveTimer > 0) return;
+    saveTimer = 30;
+    player.save();
+  }
+
+  // mobile browsers routinely never fire beforeunload, so lean on these two.
+  // visibilitychange fires at the document, so it must be bound there.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') player.save();
+  });
+  addEventListener('pagehide', () => player.save());
 
   /* ------------------------------------------------------------- render */
 
@@ -418,12 +458,13 @@ async function start() {
   }
 
   boot.classList.add('hidden');
-  document.body.classList.add('flickering');
+  document.getElementById('ui').classList.add('flickering');
   requestAnimationFrame(frame);
 
   addEventListener('pointerdown', () => { audio.init(); audio.resume(); }, { once: true });
   registerServiceWorker();
   addEventListener('beforeunload', () => player.save());
+
   game.classes = { Boarding };          // handy from the console
   window.STARQUEST = game;
 }

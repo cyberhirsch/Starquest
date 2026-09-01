@@ -34,6 +34,16 @@ export class UI {
       log: document.getElementById('log'),
       prompt: document.getElementById('prompt'),
       speed: document.getElementById('speedVal'),
+      vitals: document.getElementById('vitals'),
+      hullBar: document.getElementById('hullBar'),
+      hullVal: document.getElementById('hullVal'),
+      shieldBar: document.getElementById('shieldBar'),
+      shieldVal: document.getElementById('shieldVal'),
+      hitFlash: document.getElementById('hitFlash'),
+      objective: document.getElementById('objective'),
+      objTitle: document.getElementById('objTitle'),
+      objBody: document.getElementById('objBody'),
+      objStep: document.getElementById('objStep'),
     };
     this.screen = null;
     this.tab = 'loadout';
@@ -64,6 +74,16 @@ export class UI {
     this.el.shipName.textContent = ship.cls.name;
     this.el.modeTag.textContent = player.mode === 'gunner' ? 'GUNNER' : 'PILOT';
     this.el.speed.textContent = Math.round(vlen(ship.vel));
+
+    // vitals: the number, not just a bar — dying should never be a surprise
+    const hullFrac = clamp(ship.hull / ship.stats.hullMax, 0, 1);
+    const shieldFrac = clamp(ship.shield / Math.max(1, ship.stats.shieldMax), 0, 1);
+    this.el.hullBar.style.width = `${hullFrac * 100}%`;
+    this.el.shieldBar.style.width = `${shieldFrac * 100}%`;
+    this.el.hullVal.textContent = `${Math.ceil(ship.hull)}/${ship.stats.hullMax}`;
+    this.el.shieldVal.textContent = `${Math.ceil(ship.shield)}/${ship.stats.shieldMax}`;
+    this.el.vitals.classList.toggle('hurt', hullFrac < 0.5);
+    this.el.vitals.classList.toggle('critical', hullFrac < 0.25);
 
     // weapon strip
     if (this._wepSig !== this.weaponSignature(ship, player)) {
@@ -111,6 +131,34 @@ export class UI {
     const p = g.promptText;
     if (p) { this.el.prompt.textContent = p; this.el.prompt.classList.remove('hidden'); }
     else this.el.prompt.classList.add('hidden');
+  }
+
+  /** Show the current tutorial objective, or clear it when there is none. */
+  setObjective(card) {
+    const el = this.el.objective;
+    if (!el) return;
+    if (!card) { el.classList.add('hidden'); this._objId = null; return; }
+    el.classList.remove('hidden');
+    if (this._objId === card.id && !card.complete) return;
+    this._objId = card.id;
+    this.el.objTitle.textContent = card.title;
+    this.el.objBody.textContent = card.body;
+    this.el.objStep.textContent = card.complete ? '' : `${card.index + 1}/${card.total}`;
+    el.classList.remove('fresh');
+    void el.offsetWidth;                 // restart the entry animation
+    el.classList.add('fresh');
+  }
+
+  /** Red edge flash, scaled by how hard the hit landed. */
+  flashDamage(strength = 0.5) {
+    const el = this.el.hitFlash;
+    if (!el) return;
+    el.style.transition = 'none';
+    el.style.opacity = String(clamp(strength, 0.15, 0.9));
+    requestAnimationFrame(() => {
+      el.style.transition = 'opacity 0.35s ease-out';
+      el.style.opacity = '0';
+    });
   }
 
   weaponSignature(ship, player) {
@@ -182,7 +230,9 @@ export class UI {
       case 'switchShip': say(switchShip(player, +arg, g.world)); this.render(); return;
       case 'repair': say(repair(player)); this.render(); return;
       case 'fines': say(payFines(player)); this.render(); return;
-      case 'save': this.log(player.save() ? 'FLIGHT LOG SAVED' : 'SAVE FAILED', 'good'); return;
+      case 'save': this.log(player.save() ? 'FLIGHT LOG SAVED' : 'SAVE FAILED', 'good');
+        this.render(); return;
+      case 'reload': location.reload(); return;
       case 'undock': g.undock(); return;
       case 'strike': g.boarding?.strike(); this.render(); return;
       case 'loot': g.boarding?.take(arg); this.render(); return;
@@ -521,12 +571,24 @@ export class UI {
         instead of scattering it; with a breaching rig you can board what drifts.
       </p>
       ${this.installHint()}
+      <p class="note">${this.saveLine()}</p>
       <div class="rowbtns">
         <button class="hbtn" data-do="assist">FLIGHT ASSIST: ${this.game.player.assist ? 'ON' : 'OFF'}</button>
         <button class="hbtn" data-do="crt">CRT FILTER</button>
-        <button class="hbtn" data-do="save">SAVE</button>
+        <button class="hbtn" data-do="save">SAVE NOW</button>
+        <button class="hbtn" data-do="reload">RELOAD LAST SAVE</button>
         <button class="hbtn" data-do="newgame">NEW GAME</button>
       </div></div></div></div></div>`;
+  }
+
+  /** When the flight log was last written, in plain words. */
+  saveLine() {
+    const t = this.game.player.lastSaved;
+    if (!t) return 'Not saved yet. The game also saves itself every 30 seconds, when you dock, and whenever you leave the page.';
+    const secs = Math.round((Date.now() - t) / 1000);
+    const when = secs < 5 ? 'just now' : secs < 90 ? `${secs} seconds ago`
+      : `${Math.round(secs / 60)} minutes ago`;
+    return `Flight log saved ${when}. It also saves itself every 30 seconds, when you dock, and whenever you leave the page.`;
   }
 
   /** Home-screen install nudge — iOS needs the manual Share-sheet route. */

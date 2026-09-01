@@ -285,26 +285,29 @@ export function updateTurrets(ship, world, dt) {
 
 export function damageShip(ship, amount, world, opts = {}) {
   if (ship.dead) return;
+  const isPlayer = ship === world.player.ship;
   ship.lastHitAt = world.time;
   ship.flash = 1;
   if (opts.from) ship.lastHitBy = opts.from;
   if (opts.ion) {
     ship.ion += opts.ion;
-    if (ship.ion > 40 && !ship.disabled && ship !== world.player.ship) disableShip(ship, world);
+    if (ship.ion > 40 && !ship.disabled && !isPlayer) disableShip(ship, world);
   }
-  let dmg = amount;
+  let dmg = amount * (isPlayer ? world.playerDamageScale() : 1);
+  const shieldBefore = ship.shield;
   if (ship.shield > 0) {
     const absorbed = Math.min(ship.shield, dmg);
     ship.shield -= absorbed;
     dmg -= absorbed;
     world.fx.shieldHit(ship, opts.point);
   }
+  if (isPlayer) world.notePlayerDamage(amount, shieldBefore, opts);
   if (dmg <= 0) return;
   ship.hull -= dmg;
 
   // wounded civilian hulls strike their colours instead of blowing up
   const frac = ship.hull / ship.stats.hullMax;
-  if (frac <= 0.22 && !ship.disabled && ship !== world.player.ship) {
+  if (frac <= 0.22 && !ship.disabled && !isPlayer) {
     const surrenders = ship.faction === 'trader' || ship.faction === 'civilian'
       ? 0.95 : ship.faction === 'pirate' ? 0.35 : 0.5;
     if (Math.random() < surrenders) { disableShip(ship, world); ship.hull = Math.max(1, ship.hull); return; }

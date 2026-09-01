@@ -46,6 +46,19 @@ export function drawHUD(batch, g) {
     batch.line2(cx, cy - rr * 1.5, cx, cy - rr * 0.6, hud, 1.6, 0.9, 1.1);
   }
 
+  /* incoming fire: a wedge at the attacker's bearing, up = dead ahead ---- */
+  const hit = world.lastHit;
+  if (hit && hit.dir && time - hit.t < 3.5) {
+    const age = 1 - (time - hit.t) / 3.5;
+    qconj(_q, cam.quat);
+    qrot(_a, _q, hit.dir);
+    const bearing = Math.atan2(_a[0], -_a[2]);
+    const theta = bearing - Math.PI / 2;
+    const r = 92 * u;
+    batch.circle2(cx, cy, r, C.danger, 4.0, age, 1.6, 10, theta - 0.30, theta + 0.30);
+    batch.circle2(cx, cy, r * 1.14, C.danger, 2.0, age * 0.7, 1.2, 8, theta - 0.20, theta + 0.20);
+  }
+
   /* velocity vector ----------------------------------------------------- */
   const speed = vlen(ship.vel);
   if (speed > 4) {

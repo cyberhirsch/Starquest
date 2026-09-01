@@ -93,6 +93,35 @@ check('INV opens the loadout', await page.locator('#overlay .screen').isVisible(
 await page.locator('[data-do="close"]').click();
 check('overlay closes', await until(() => document.getElementById('overlay').classList.contains('hidden')));
 
+// --- tutorial and persistence ------------------------------------------------
+check('hull readout shows real numbers',
+  /\d+\/\d+/.test(await page.locator('#hullVal').textContent()),
+  await page.locator('#hullVal').textContent());
+check('starter ship carries a cannon and a cutter',
+  (await page.locator('#weapons').textContent()).includes('MINING LASER'));
+// earlier checks left the throttle in reverse, so open it up again and let the
+// first objective ("build speed") actually complete
+await dragBar(0.05);
+check('tutorial advanced past the throttle step',
+  await until(() => window.STARQUEST.player.tutorial.step >= 1, 40),
+  `step ${await read(() => window.STARQUEST.player.tutorial.step)}`);
+
+await read(() => { window.STARQUEST.player.credits = 4242; });
+await read(() => {
+  Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+  document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+});
+check('backgrounding the tab writes the save',
+  (await read(() => JSON.parse(localStorage.getItem('starquest.save.v1') || '{}').credits)) === 4242);
+
+await page.reload({ waitUntil: 'load' });
+await until(() => !!window.STARQUEST);
+check('progress survives a reload',
+  (await read(() => window.STARQUEST.player.credits)) === 4242);
+
+await page.locator('[data-action="skiptut"]').click();
+check('SKIP TUTORIAL dismisses it', await until(() => window.STARQUEST.player.tutorial.done));
+
 check('manifest is served', (await read(async () => (await fetch('manifest.webmanifest')).status)) === 200);
 check('service worker API is present', await read(() => 'serviceWorker' in navigator));
 

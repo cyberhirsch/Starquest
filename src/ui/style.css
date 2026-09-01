@@ -45,6 +45,25 @@ html, body {
 #topbar .right b { color: var(--amber); text-shadow: 0 0 10px rgba(255, 194, 60, 0.55); }
 #wantedWrap.hot b { color: var(--red); text-shadow: 0 0 10px rgba(255, 91, 71, 0.7); }
 
+#objective {
+  position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+  width: min(400px, 44vw); padding: 9px 12px 11px; pointer-events: auto;
+  border-color: rgba(255, 194, 60, 0.5);
+  box-shadow: 0 0 18px rgba(255, 194, 60, 0.12), inset 0 0 22px rgba(50, 34, 0, 0.4);
+}
+#objective .objhead { display: flex; align-items: baseline; gap: 8px; }
+#objective b { color: var(--amber); font-size: 12px; letter-spacing: 0.18em; flex: 1;
+  text-shadow: 0 0 12px rgba(255, 194, 60, 0.5); }
+#objective i { font-style: normal; color: var(--dim); font-size: 10px; }
+#objective p { margin: 6px 0 8px; font-size: 10.5px; line-height: 1.55; color: #a9e8c6;
+  text-transform: none; letter-spacing: 0.02em; }
+#objective .hbtn { font-size: 9.5px; padding: 5px 9px; }
+#objective.fresh { animation: objIn 0.5s ease-out; }
+@keyframes objIn {
+  from { transform: translateX(-50%) scale(0.94); border-color: var(--amber); }
+  to { transform: translateX(-50%) scale(1); }
+}
+
 #targetPanel {
   position: absolute; top: 44px; right: 14px; width: 232px; padding: 8px 10px;
   font-size: 11px;
@@ -60,6 +79,31 @@ html, body {
 #targetPanel .bar s { display: block; height: 100%; background: var(--green); text-decoration: none;
   box-shadow: 0 0 8px rgba(108, 255, 159, 0.8); transition: width 0.12s linear; }
 #tgtShield { background: var(--blue) !important; box-shadow: 0 0 8px rgba(124, 196, 255, 0.8) !important; }
+
+#vitals {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 40px;
+  padding: 7px 12px; display: grid; gap: 4px; min-width: 260px;
+}
+#vitals .vrow { display: flex; align-items: center; gap: 8px; font-size: 10px; }
+#vitals i { font-style: normal; color: var(--dim); width: 30px; }
+#vitals u { flex: 1; height: 7px; background: rgba(108, 255, 159, 0.12); display: block;
+  text-decoration: none; border: 1px solid rgba(108, 255, 159, 0.18); }
+#vitals s { display: block; height: 100%; text-decoration: none; background: var(--green);
+  box-shadow: 0 0 10px rgba(108, 255, 159, 0.8); transition: width 0.12s linear; }
+#vitals b { width: 62px; text-align: right; color: var(--green); font-size: 11px; }
+#shieldBar { background: var(--blue); box-shadow: 0 0 10px rgba(124, 196, 255, 0.8); }
+#shieldVal { color: var(--blue); }
+#vitals.hurt { border-color: rgba(255, 91, 71, 0.75); box-shadow: 0 0 18px rgba(255, 91, 71, 0.35); }
+#vitals.hurt #hullBar { background: var(--red); box-shadow: 0 0 12px rgba(255, 91, 71, 0.9); }
+#vitals.hurt #hullVal { color: var(--red); }
+#vitals.critical { animation: vitalPulse 0.7s infinite; }
+@keyframes vitalPulse { 50% { border-color: rgba(255, 91, 71, 0.25); box-shadow: none; } }
+
+#hitFlash {
+  position: fixed; inset: 0; z-index: 20; pointer-events: none; opacity: 0;
+  box-shadow: inset 0 0 120px rgba(255, 60, 40, 0.85);
+  transition: opacity 0.35s ease-out;
+}
 
 #weapons {
   position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
@@ -233,6 +277,9 @@ h3 { font-size: 11px; color: var(--dim); letter-spacing: 0.2em; margin: 0 0 8px;
 #bootMsg { color: var(--amber); font-size: 12px; max-width: 620px; line-height: 1.7; text-transform: none; }
 #bootMsg a { color: var(--green); }
 
+/* Only ever put this on the UI layer. Animating opacity on an ancestor of the
+   canvas forces the GPU surface through a re-composite and Android/Chrome
+   renders black blocks over it. */
 .flickering { animation: flicker 3.5s infinite; }
 @keyframes flicker { 0%,96%,100% { opacity: 1; } 97% { opacity: 0.82; } 98.5% { opacity: 0.94; } }
 
@@ -257,10 +304,12 @@ h3 { font-size: 11px; color: var(--dim); letter-spacing: 0.2em; margin: 0 0 8px;
 }
 
 /* touch layout: keep the log and speed readout clear of the thumb controls */
-body.touch #log { left: 92px; bottom: auto; top: 34px; width: 42vw; flex-direction: column; }
+body.touch #log { left: 84px; bottom: auto; top: 34px; width: 20vw; flex-direction: column; }
+body.touch #objective { width: min(340px, 36vw); }
 body.touch #log div { animation: logIn 0.18s forwards, logOut 0.7s 5s forwards; }
 body.touch #speedout { left: 92px; top: auto; bottom: 16px; transform: none; }
 body.touch #btnRow { bottom: max(12px, env(safe-area-inset-bottom)); right: max(12px, env(safe-area-inset-right)); }
 body.touch #weapons { bottom: 74px; }
+body.touch #vitals { bottom: 102px; min-width: 200px; }
 body.touch #prompt { top: 22%; }
 body.touch #targetPanel { top: 34px; right: 12px; width: 210px; }

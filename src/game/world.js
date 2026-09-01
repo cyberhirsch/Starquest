@@ -64,6 +64,8 @@ export class World {
     this.oreAccum = {};
     this.spawnTimer = 4;
     this.traderTimer = 6;
+    this.grace = 75;            // seconds before the belt turns hostile
+    this.lastHit = null;
     this.kills = 0;
     this.onLog = null;
     this.onKill = null;
@@ -72,6 +74,41 @@ export class World {
       sparks: (p, n, size) => this.sparks(p, n, size),
       shieldHit: (ship, point) => this.shieldFlash(ship, point),
     };
+  }
+
+  /** New pilots take a fraction of every hit until they have some standing. */
+  playerDamageScale() {
+    const t = clamp(this.player.threat, 0, 1.5);
+    return lerp(0.45, 1, t / 1.5);
+  }
+
+  /** Tell the player what just hit them, and from where. */
+  notePlayerDamage(amount, shieldBefore, opts = {}) {
+    const ship = this.player.ship;
+    const src = opts.from && opts.from !== ship ? opts.from : null;
+    this.lastHit = {
+      t: this.time,
+      from: src,
+      cause: opts.cause || (src ? 'fire' : 'impact'),
+      dir: src ? vnorm(v3(), vsub(v3(), src.pos, ship.pos)) : null,
+      amount,
+    };
+    this.onPlayerDamage?.(this.lastHit);
+
+    const key = opts.cause === 'collision' ? 'collision' : src ? `s${src.id}` : 'unknown';
+    this._hitLog = this._hitLog || new Map();
+    if (this.time - (this._hitLog.get(key) ?? -99) > 3.5) {
+      this._hitLog.set(key, this.time);
+      if (opts.cause === 'collision') this.log('HULL IMPACT — WATCH THE ROCKS', 'warn');
+      else if (src) this.log(`UNDER FIRE FROM ${src.name}`, 'danger');
+      else this.log('TAKING DAMAGE', 'danger');
+    }
+    if (shieldBefore > 0 && ship.shield <= 0) this.log('SHIELDS DOWN', 'danger');
+    const frac = ship.hull / ship.stats.hullMax;
+    if (frac < 0.35 && this.time - (this._hullWarn ?? -99) > 6) {
+      this._hullWarn = this.time;
+      this.log(`HULL AT ${Math.round(frac * 100)}% — DISENGAGE OR DOCK`, 'danger');
+    }
   }
 
   log(text, kind = 'info') {
@@ -90,7 +127,7 @@ export class World {
     };
     // docking mouth sits on the station's -Z face
     for (let i = 0; i < ASTEROID_COUNT; i++) this.spawnAsteroid();
-    for (let i = 0; i < 3; i++) this.spawnPirate(true);
+    this.spawnPirate(true);          // one, and it starts far away
     for (let i = 0; i < 2; i++) this.spawnTrader();
     this.spawnMiner(); this.spawnMiner();
   }
@@ -138,7 +175,7 @@ export class World {
     const cls = tier >= 2 && Math.random() < 0.35 ? 'marauder' : pick(['corsair', 'marauder', 'shuttle']);
     const guns = tier >= 2 ? ['burst', 'auto2', 'auto1'] : tier >= 1 ? ['pulse', 'auto1', null] : ['pulse', null, null];
     const s = createShip(cls, 'pirate', {
-      pos: far ? this.randomEdgePoint(v3()) : this.nearPlayerPoint(v3(), 1500),
+      pos: far ? this.randomEdgePoint(v3()) : this.nearPlayerPoint(v3(), tier < 1 ? 2600 : 1500),
       loadout: { hardpoints: guns, utility: ['shield1', tier >= 2 ? 'thruster' : null, null] },
       credits: Math.round(rand(3200, 400) * (1 + tier)),
       name: pick(['RED VESPER', 'GRAVE JACKAL', 'HOLLOW CROWN', 'NINE TEETH', 'SALT WIDOW', 'BLACK MERIDIAN']),
@@ -608,8 +645,8 @@ export class World {
         if (vn < 0) {
           vaddScaled(s.vel, s.vel, _a, -vn * 1.5);
           const impact = Math.abs(vn);
-          if (impact > 22) {
-            damageShip(s, impact * 0.35, this, { point: s.pos });
+          if (impact > 34) {
+            damageShip(s, impact * 0.20, this, { point: s.pos, cause: 'collision' });
             this.sparks(s.pos, 4, 3);
           }
         }
@@ -619,13 +656,15 @@ export class World {
   }
 
   director(dt) {
+    this.grace = Math.max(0, this.grace - dt);
     this.spawnTimer -= dt;
     this.traderTimer -= dt;
     const pirates = this.ships.filter((s) => s.faction === 'pirate' && !s.dead).length;
-    const want = 2 + Math.floor(this.player.threat);
+    const want = this.grace > 0 ? 0 : 2 + Math.floor(this.player.threat);
     if (this.spawnTimer <= 0) {
       this.spawnTimer = rand(26, 14);
-      if (pirates < want) this.spawnPirate(Math.random() < 0.5);
+      // early on they always arrive from a distance, so you see them coming
+      if (pirates < want) this.spawnPirate(this.player.threat < 1 ? true : Math.random() < 0.5);
     }
     if (this.traderTimer <= 0) {
       this.traderTimer = rand(50, 25);

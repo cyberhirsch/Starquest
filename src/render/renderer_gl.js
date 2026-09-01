@@ -32,9 +32,12 @@ function program(gl, vs, fs, label) {
 }
 
 export async function createGLRenderer(canvas, opts = {}) {
+  // No `desynchronized` here: the low-latency canvas path can present a
+  // partially composited surface on Android/Chrome, which shows up as black
+  // rectangles over the scene.
   const gl = canvas.getContext('webgl2', {
     alpha: false, antialias: false, depth: false, stencil: false,
-    powerPreference: 'high-performance', desynchronized: true,
+    powerPreference: 'high-performance',
   });
   if (!gl) throw new Error('WebGL2 is not available in this browser.');
 
