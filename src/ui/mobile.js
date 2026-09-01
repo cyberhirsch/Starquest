@@ -127,7 +127,22 @@ export function setupMobile(game, renderer, canvas, input) {
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   if (location.protocol !== 'https:' && location.hostname !== 'localhost') return;
+
+  // The cache is deliberately cache-first so the game runs with no signal, which
+  // means a deploy would otherwise only appear on the launch *after* next. When a
+  // newly installed worker takes over, reload once into the fresh build. The
+  // hadController guard keeps the very first install from reloading on arrival.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+
   addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((e) => console.warn('SW:', e.message));
+    navigator.serviceWorker.register('./sw.js')
+      .then((reg) => reg.update().catch(() => {}))
+      .catch((e) => console.warn('SW:', e.message));
   });
 }
