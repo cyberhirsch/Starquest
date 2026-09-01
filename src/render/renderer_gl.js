@@ -41,33 +41,50 @@ export async function createGLRenderer(canvas, opts = {}) {
   });
   if (!gl) throw new Error('WebGL2 is not available in this browser.');
 
-  const floatOK = !!gl.getExtension('EXT_color_buffer_float')
-    || !!gl.getExtension('EXT_color_buffer_half_float');
-  const HDR = floatOK ? gl.RGBA16F : gl.RGBA8;
-  const HDR_TYPE = floatOK ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+  let HDR, HDR_TYPE;
 
-  const lineProg = program(gl, LINE_VS, LINE_FS, 'line');
-  const brightProg = program(gl, FULLSCREEN_VS, BRIGHT_FS, 'bright');
-  const blurProg = program(gl, FULLSCREEN_VS, BLUR_FS, 'blur');
-  const compProg = program(gl, FULLSCREEN_VS, COMPOSITE_FS, 'composite');
+  // Extensions belong to the context, not the canvas, so they have to be asked
+  // for again after a context restore. Miss this and the float framebuffers come
+  // back incomplete and the whole scene renders black.
+  function enableExtensions() {
+    const floatOK = !!gl.getExtension('EXT_color_buffer_float')
+      || !!gl.getExtension('EXT_color_buffer_half_float');
+    HDR = floatOK ? gl.RGBA16F : gl.RGBA8;
+    HDR_TYPE = floatOK ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+  }
+  enableExtensions();
 
-  // instance buffer + VAO
-  const vao = gl.createVertexArray();
-  const instBuf = gl.createBuffer();
-  gl.bindVertexArray(vao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-  ['aA', 'aB', 'aCol', 'aExt'].forEach((name, i) => {
-    const loc = gl.getAttribLocation(lineProg.p, name);
-    if (loc < 0) return;
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, STRIDE * 4, i * 16);
-    gl.vertexAttribDivisor(loc, 1);
-  });
-  gl.bindVertexArray(null);
-  const emptyVao = gl.createVertexArray();
+  let lineProg, brightProg, blurProg, compProg, vao, instBuf, emptyVao;
   let instCap = 0;
 
-  const targets = {};
+  // Everything the GL context owns lives here, so it can all be built again
+  // after a context loss — which Android does routinely when an app is
+  // backgrounded. Without this the game keeps simulating into a blank canvas.
+  function buildPipelines() {
+    enableExtensions();
+    lineProg = program(gl, LINE_VS, LINE_FS, 'line');
+    brightProg = program(gl, FULLSCREEN_VS, BRIGHT_FS, 'bright');
+    blurProg = program(gl, FULLSCREEN_VS, BLUR_FS, 'blur');
+    compProg = program(gl, FULLSCREEN_VS, COMPOSITE_FS, 'composite');
+
+    vao = gl.createVertexArray();
+    instBuf = gl.createBuffer();
+    instCap = 0;
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
+    ['aA', 'aB', 'aCol', 'aExt'].forEach((name, i) => {
+      const loc = gl.getAttribLocation(lineProg.p, name);
+      if (loc < 0) return;
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, STRIDE * 4, i * 16);
+      gl.vertexAttribDivisor(loc, 1);
+    });
+    gl.bindVertexArray(null);
+    emptyVao = gl.createVertexArray();
+  }
+  buildPipelines();
+
+  let targets = {};
   let W = 2, H = 2;
 
   const makeTarget = (w, h) => {
@@ -81,6 +98,10 @@ export async function createGLRenderer(canvas, opts = {}) {
     const fbo = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE && !gl.isContextLost()) {
+      console.warn(`render target incomplete (0x${status.toString(16)})`);
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return { tex, fbo, w, h };
   };
@@ -88,7 +109,7 @@ export async function createGLRenderer(canvas, opts = {}) {
   function allocate(w, h) {
     W = Math.max(2, w | 0); H = Math.max(2, h | 0);
     for (const t of Object.values(targets)) {
-      gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo);
+      if (!gl.isContextLost()) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }
     }
     const hw = Math.max(2, W >> 1), hh = Math.max(2, H >> 1);
     const qw = Math.max(2, W >> 2), qh = Math.max(2, H >> 2);
@@ -122,7 +143,7 @@ export async function createGLRenderer(canvas, opts = {}) {
     },
 
     render(batch, viewProj, time) {
-      if (!targets.scene) return;
+      if (!targets.scene || state.lost || gl.isContextLost()) return;
       // ---- scene ----------------------------------------------------------
       bindTarget(targets.scene);
       gl.clearColor(0.004, 0.010, 0.013, 1);
@@ -190,9 +211,21 @@ export async function createGLRenderer(canvas, opts = {}) {
     },
   };
 
+  state.lost = false;
+
+  // preventDefault is what makes a restore possible at all
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
-    console.warn('WebGL context lost');
+    state.lost = true;
+    state.onLost?.('webgl2');
+  });
+
+  canvas.addEventListener('webglcontextrestored', () => {
+    buildPipelines();
+    targets = {};
+    allocate(W, H);
+    state.lost = false;
+    state.onRestored?.('webgl2');
   });
 
   return state;

@@ -34,7 +34,11 @@ Open the URL on the device.
 - **iOS / Safari** — *Share → Add to Home Screen*. Launches fullscreen from the icon.
   WebGPU needs iOS 26+; older iPhones fall back to WebGL2 automatically.
 
-The service worker caches the whole game on first load, so it plays with no signal.
+The service worker fetches from the network first and falls back to its cache, so a
+new build reaches you on the next launch and the game still plays with no signal at
+all. Backgrounding a phone app usually takes the GPU context with it; both renderers
+rebuild themselves when that happens, and reload as a last resort rather than leaving
+you on a blank canvas.
 
 ## Controls
 

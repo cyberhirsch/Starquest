@@ -8,78 +8,92 @@ const HDR = 'rgba16float';
 
 export async function createRenderer(canvas, opts = {}) {
   if (!('gpu' in navigator)) throw new Error('WebGPU is not available in this browser.');
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-  if (!adapter) throw new Error('No WebGPU adapter — try a machine or browser with GPU access.');
-  const device = await adapter.requestDevice();
   const context = canvas.getContext('webgpu');
   if (!context) throw new Error('Could not acquire a WebGPU canvas context.');
   const format = navigator.gpu.getPreferredCanvasFormat();
-  context.configure({ device, format, alphaMode: 'opaque' });
 
-  const lineMod = device.createShaderModule({ code: LINE_WGSL, label: 'lines' });
-  const brightMod = device.createShaderModule({ code: BRIGHT_WGSL, label: 'bright' });
-  const blurMod = device.createShaderModule({ code: BLUR_WGSL, label: 'blur' });
-  const compMod = device.createShaderModule({ code: COMPOSITE_WGSL, label: 'composite' });
+  let device, linePipeline, brightPipeline, blurPipeline, compPipeline, sampler;
+  let camUB, ub, camBG;
+  let instanceBuf = null, instanceCap = 0;
 
-  const linePipeline = device.createRenderPipeline({
-    label: 'line-pipeline',
-    layout: 'auto',
-    vertex: {
-      module: lineMod, entryPoint: 'vs',
-      buffers: [{
-        arrayStride: STRIDE * 4,
-        stepMode: 'instance',
-        attributes: [
-          { shaderLocation: 0, offset: 0, format: 'float32x4' },
-          { shaderLocation: 1, offset: 16, format: 'float32x4' },
-          { shaderLocation: 2, offset: 32, format: 'float32x4' },
-          { shaderLocation: 3, offset: 48, format: 'float32x4' },
-        ],
-      }],
-    },
-    fragment: {
-      module: lineMod, entryPoint: 'fs',
-      targets: [{
-        format: HDR,
-        blend: {
-          color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
-          alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
-        },
-      }],
-    },
-    primitive: { topology: 'triangle-strip', stripIndexFormat: undefined },
-  });
-
-  const post = (mod, target) => device.createRenderPipeline({
-    layout: 'auto',
-    vertex: { module: mod, entryPoint: 'vs' },
-    fragment: { module: mod, entryPoint: 'fs', targets: [{ format: target }] },
-    primitive: { topology: 'triangle-list' },
-  });
-  const brightPipeline = post(brightMod, HDR);
-  const blurPipeline = post(blurMod, HDR);
-  const compPipeline = post(compMod, format);
-
-  const sampler = device.createSampler({
-    magFilter: 'linear', minFilter: 'linear',
-    addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge',
-  });
-
-  const camUB = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const camData = new Float32Array(24);
-  const mkUB = () => device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  const ub = { bright: mkUB(), blurH1: mkUB(), blurV1: mkUB(), blurH2: mkUB(), blurV2: mkUB(), comp: mkUB() };
   const ubData = new Float32Array(8);
+
+  // Everything the device owns is built here so it can be built again after a
+  // device loss — which Android does routinely when an app is backgrounded.
+  // Without this the game keeps simulating into a blank canvas.
+  async function acquire() {
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) throw new Error('No WebGPU adapter — try a machine or browser with GPU access.');
+    device = await adapter.requestDevice();
+    context.configure({ device, format, alphaMode: 'opaque' });
+    watchForLoss();
+
+    const lineMod = device.createShaderModule({ code: LINE_WGSL, label: 'lines' });
+    const brightMod = device.createShaderModule({ code: BRIGHT_WGSL, label: 'bright' });
+    const blurMod = device.createShaderModule({ code: BLUR_WGSL, label: 'blur' });
+    const compMod = device.createShaderModule({ code: COMPOSITE_WGSL, label: 'composite' });
+
+    linePipeline = device.createRenderPipeline({
+      label: 'line-pipeline',
+      layout: 'auto',
+      vertex: {
+        module: lineMod, entryPoint: 'vs',
+        buffers: [{
+          arrayStride: STRIDE * 4,
+          stepMode: 'instance',
+          attributes: [
+            { shaderLocation: 0, offset: 0, format: 'float32x4' },
+            { shaderLocation: 1, offset: 16, format: 'float32x4' },
+            { shaderLocation: 2, offset: 32, format: 'float32x4' },
+            { shaderLocation: 3, offset: 48, format: 'float32x4' },
+          ],
+        }],
+      },
+      fragment: {
+        module: lineMod, entryPoint: 'fs',
+        targets: [{
+          format: HDR,
+          blend: {
+            color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+          },
+        }],
+      },
+      primitive: { topology: 'triangle-strip', stripIndexFormat: undefined },
+    });
+
+    const post = (mod, target) => device.createRenderPipeline({
+      layout: 'auto',
+      vertex: { module: mod, entryPoint: 'vs' },
+      fragment: { module: mod, entryPoint: 'fs', targets: [{ format: target }] },
+      primitive: { topology: 'triangle-list' },
+    });
+    brightPipeline = post(brightMod, HDR);
+    blurPipeline = post(blurMod, HDR);
+    compPipeline = post(compMod, format);
+
+    sampler = device.createSampler({
+      magFilter: 'linear', minFilter: 'linear',
+      addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge',
+    });
+
+    camUB = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const mkUB = () => device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    ub = { bright: mkUB(), blurH1: mkUB(), blurV1: mkUB(), blurH2: mkUB(), blurV2: mkUB(), comp: mkUB() };
+
+    instanceBuf = null;
+    instanceCap = 0;
+    camBG = device.createBindGroup({
+      layout: linePipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: camUB } }],
+    });
+  }
+
   const writeUB = (buf, texelX, texelY, a, b, c, d) => {
     ubData.set([texelX, texelY, 0, 0, a, b, c, d]);
     device.queue.writeBuffer(buf, 0, ubData);
   };
-
-  let instanceBuf = null, instanceCap = 0;
-  const camBG = device.createBindGroup({
-    layout: linePipeline.getBindGroupLayout(0),
-    entries: [{ binding: 0, resource: { buffer: camUB } }],
-  });
 
   let tex = {}, bg = {}, W = 1, H = 1;
 
@@ -138,7 +152,8 @@ export async function createRenderer(canvas, opts = {}) {
 
   const state = {
     backend: 'webgpu',
-    device, context, format,
+    context, format,
+    get device() { return device; },
     width: W, height: H, dpr: 1,
     resScale: opts.resScale ?? 1,
     bloom: [0.85, 0.60],
@@ -156,7 +171,7 @@ export async function createRenderer(canvas, opts = {}) {
     },
 
     render(batch, viewProj, time) {
-      if (!tex.scene) return;
+      if (!tex.scene || state.lost) return;
       camData.set(viewProj, 0);
       camData.set([W, H, 1 / W, 1 / H], 16);
       camData.set([time, 0, 0, 0], 20);
@@ -212,9 +227,27 @@ export async function createRenderer(canvas, opts = {}) {
     },
   };
 
-  device.lost.then((info) => {
-    if (info.reason !== 'destroyed') console.error('WebGPU device lost:', info.message);
-  });
+  function watchForLoss() {
+    const lostDevice = device;
+    device.lost.then(async (info) => {
+      if (info.reason === 'destroyed' || device !== lostDevice) return;
+      state.lost = true;
+      state.onLost?.('webgpu');
+      try {
+        await acquire();
+        tex = {};
+        allocate(W, H);
+        state.lost = false;
+        state.onRestored?.('webgpu');
+      } catch (err) {
+        console.error('WebGPU could not be re-acquired:', err.message);
+      }
+    });
+  }
+
+  await acquire();
+  state.lost = false;
+  allocate(2, 2);
 
   return state;
 }

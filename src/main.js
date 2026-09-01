@@ -77,6 +77,21 @@ async function start() {
     if (kind === 'danger') audio.alarm();
   };
 
+  // A backgrounded Android app usually loses its GPU context. The renderers
+  // rebuild themselves; if the browser never hands one back, reload rather than
+  // leave the player staring at a blank canvas while the game plays on.
+  let lostAt = 0;
+  renderer.onLost = () => {
+    lostAt = performance.now();
+    player.save();
+    ui.log('GRAPHICS CONTEXT LOST — REBUILDING', 'warn');
+  };
+  renderer.onRestored = () => {
+    lostAt = 0;
+    mobile.resize();
+    ui.log('GRAPHICS CONTEXT RESTORED', 'good');
+  };
+
   world.onPlayerDamage = (hit) => {
     const frac = hit.amount / Math.max(1, player.ship.stats.hullMax);
     ui.flashDamage(0.2 + frac * 2.4);
@@ -451,6 +466,12 @@ async function start() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (document.visibilityState !== 'hidden') {
+      if (renderer.lost) {
+        // give the browser a few seconds to restore before falling back
+        if (lostAt && now - lostAt > 5000) { player.save(); location.reload(); return; }
+        requestAnimationFrame(frame);
+        return;
+      }
       update(dt);
       render();
       mobile.tick(dt);
@@ -470,6 +491,7 @@ async function start() {
   addEventListener('beforeunload', () => player.save());
 
   game.classes = { Boarding };          // handy from the console
+  game.batch = batch;
   window.STARQUEST = game;
 }
 

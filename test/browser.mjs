@@ -122,6 +122,26 @@ check('progress survives a reload',
 await page.locator('[data-action="skiptut"]').click();
 check('SKIP TUTORIAL dismisses it', await until(() => window.STARQUEST.player.tutorial.done));
 
+// --- GPU context loss, which Android does on every backgrounding -----------
+if (backend === 'webgl2') {
+  await read(() => {
+    window.__ext = window.STARQUEST.renderer.gl.getExtension('WEBGL_lose_context');
+    window.__ext.loseContext();
+  });
+  check('a lost context is noticed', await until(() => window.STARQUEST.renderer.lost));
+  await read(() => window.__ext.restoreContext());
+  check('the context is rebuilt', await until(() => !window.STARQUEST.renderer.lost, 30));
+  await page.waitForTimeout(1200);
+  check('the world draws again after a restore',
+    await until(() => {
+      const b = window.STARQUEST.batch;
+      let world = 0;
+      for (let i = 0; i < b.count; i++) if (b.data[i * 16 + 3] < 0.5) world++;
+      return world > 100;
+    }),
+    `${await read(() => window.STARQUEST.batch.count)} segments`);
+}
+
 check('manifest is served', (await read(async () => (await fetch('manifest.webmanifest')).status)) === 200);
 check('service worker API is present', await read(() => 'serviceWorker' in navigator));
 
