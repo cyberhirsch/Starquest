@@ -5,9 +5,9 @@
   "description": "Capacitor shell for STARQUEST \u2014 Android APK and the iOS project.",
   "license": "MIT",
   "scripts": {
-    "sync": "node ../../tools/make-dist.mjs packaging/mobile/www && cap sync",
-    "add:android": "node ../../tools/make-dist.mjs packaging/mobile/www && cap add android && capacitor-assets generate --android && node ../../tools/patch-android.mjs",
-    "add:ios": "node ../../tools/make-dist.mjs packaging/mobile/www && cap add ios && capacitor-assets generate --ios",
+    "sync": "node ../../tools/make-dist.mjs www && cap sync",
+    "add:android": "node ../../tools/make-dist.mjs www && cap add android && capacitor-assets generate --android && node ../../tools/patch-android.mjs",
+    "add:ios": "node ../../tools/make-dist.mjs www && cap add ios && capacitor-assets generate --ios",
     "open:android": "cap open android",
     "open:ios": "cap open ios"
   },

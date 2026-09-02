@@ -111,7 +111,7 @@ jobs:
         # capacitor.config.json, and a stale committed copy is a silent way to
         # ship an old configuration.
         run: |
-          node ../../tools/make-dist.mjs packaging/mobile/www
+          node ../../tools/make-dist.mjs www
           npx cap add android
           npx cap sync android
       - name: Icons and splash from the game's own artwork
@@ -149,7 +149,7 @@ jobs:
       - name: Generate the iOS project
         working-directory: packaging/mobile
         run: |
-          node ../../tools/make-dist.mjs packaging/mobile/www
+          node ../../tools/make-dist.mjs www
           npx cap add ios
           npx cap sync ios
           npx capacitor-assets generate --ios

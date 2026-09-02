@@ -2,14 +2,14 @@
   "name": "starquest-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Desktop shell for STARQUEST — Windows installer and macOS disk image.",
+  "description": "Desktop shell for STARQUEST \u2014 Windows installer and macOS disk image.",
   "main": "main.js",
   "author": "cyberhirsch",
   "license": "MIT",
   "scripts": {
-    "prestart": "node ../../tools/make-dist.mjs packaging/desktop/app",
+    "prestart": "node ../../tools/make-dist.mjs app",
     "start": "electron .",
-    "prebuild": "node ../../tools/make-dist.mjs packaging/desktop/app",
+    "prebuild": "node ../../tools/make-dist.mjs app",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac"
@@ -22,10 +22,23 @@
     "appId": "dev.cyberhirsch.starquest",
     "productName": "STARQUEST",
     "copyright": "MIT",
-    "directories": { "output": "out", "buildResources": "build" },
-    "files": ["main.js", "app/**/*"],
+    "directories": {
+      "output": "out",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "app/**/*"
+    ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png",
       "artifactName": "STARQUEST-${version}-windows-setup.${ext}"
     },
@@ -38,7 +51,14 @@
       "shortcutName": "STARQUEST"
     },
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
       "icon": "build/icon.png",
       "category": "public.app-category.games",
       "artifactName": "STARQUEST-${version}-macos.${ext}",
@@ -51,7 +71,9 @@
       "backgroundColor": "#000604"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "icon": "build/icon.png",
       "category": "Game",
       "artifactName": "STARQUEST-${version}-linux.${ext}"

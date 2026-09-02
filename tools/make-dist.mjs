@@ -5,11 +5,16 @@
 // Deliberately zero-dependency, like the rest of tools/: the packaging shells
 // pull in Electron and Capacitor, but the game itself must stay installable
 // with nothing but a copy of the repository.
-import { readdirSync, readFileSync, writeFileSync, statSync, mkdirSync, rmSync } from 'node:fs';
-import { join, relative, dirname } from 'node:path';
+import { readdirSync, readFileSync, writeFileSync, statSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { join, relative, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
-const OUT = process.argv[2] ? join(process.cwd(), process.argv[2]) : join(ROOT, 'dist');
+// fileURLToPath, not URL.pathname: on Windows the latter yields "/D:/a/repo",
+// and joining that produces "D:\D:\a\repo" — which is what broke the first
+// Windows build. The output directory is resolved against the caller's cwd,
+// which is the ordinary convention for a path argument.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const OUT = resolve(process.cwd(), process.argv[2] || join(ROOT, 'dist'));
 
 const walk = (dir, out = []) => {
   for (const name of readdirSync(dir)) {
@@ -38,4 +43,8 @@ for (const f of files) {
 // and the first launch would race a cache nobody needs.
 let bytes = 0;
 for (const f of files) bytes += statSync(join(OUT, f)).size;
-console.log(`dist -> ${files.length} files, ${(bytes / 1024).toFixed(0)} kB, at ${relative(process.cwd(), OUT) || '.'}`);
+if (!existsSync(join(OUT, 'index.html'))) {
+  console.error(`no index.html landed in ${OUT} — that payload will not run`);
+  process.exit(1);
+}
+console.log(`dist -> ${files.length} files, ${(bytes / 1024).toFixed(0)} kB, at ${OUT}`);
