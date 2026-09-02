@@ -14,6 +14,19 @@ Object.assign(ITEMS, CONTRACT_GOODS);
 
 let NEXT = 1;
 
+/**
+ * Contract ids are handed out by a module counter that resets with the page,
+ * while accepted jobs keep the ids they were saved with. After a reload the
+ * next board reissued c1, c2..., so a fresh offer could collide with a job you
+ * were already carrying and the board would hide it. Called on load.
+ */
+export function reseed(player) {
+  for (const c of player.contracts || []) {
+    const n = parseInt(String(c.id).slice(1), 10);
+    if (Number.isFinite(n) && n >= NEXT) NEXT = n + 1;
+  }
+}
+
 const money = (n) => Math.round(n / 50) * 50;
 
 function bountyContract(world, player) {
@@ -123,6 +136,7 @@ export function abandon(player, id) {
   const c = player.contracts[i];
   if (c.type === 'courier') removeCargo(player.ship, 'crate', c.units);
   player.contracts.splice(i, 1);
+  if (player.tracked === id) player.tracked = null;
   player.wanted += 200;
   return { ok: true, msg: `ABANDONED — ${c.title}. THE BOARD REMEMBERS.` };
 }
@@ -132,6 +146,7 @@ function pay(player, c, world) {
   player.stats.earned += c.reward;
   player.stats.contracts = (player.stats.contracts || 0) + 1;
   player.contracts = player.contracts.filter((x) => x.id !== c.id);
+  if (player.tracked === c.id) player.tracked = null;
   world.log(`CONTRACT SETTLED — ${c.reward} CR`, 'good');
 }
 
@@ -187,19 +202,35 @@ export function onDock(player, world) {
 }
 
 /** One line of progress for the HUD. */
+/**
+ * The job on the HUD. `player.tracked` names it; the first accepted job stands
+ * in when nothing is chosen.
+ *
+ * The id folds in the live count, because screens.setObjective repaints only
+ * when the id changes — with a constant id the card froze at whatever it said
+ * the moment you accepted and never moved again.
+ */
 export function tracked(player, world) {
-  const c = player.contracts[0];
-  if (!c) return null;
-  let body;
+  const list = player.contracts;
+  if (!list.length) return null;
+  const c = list.find((x) => x.id === player.tracked) || list[0];
+  let body, count;
   if (c.type === 'supply') {
-    const have = player.ship.cargo[c.item] || 0;
-    body = `${have}/${c.need} ${ITEMS[c.item].name} — deliver to ${stationName(c.station)}`;
+    count = player.ship.cargo[c.item] || 0;
+    body = `${count}/${c.need} ${ITEMS[c.item].name} — deliver to ${stationName(c.station)}`;
   } else if (c.type === 'courier') {
-    body = `${player.ship.cargo.crate || 0}/${c.units} crates — deliver to ${c.toName}`;
+    count = player.ship.cargo.crate || 0;
+    body = `${count}/${c.units} crates — deliver to ${c.toName}`;
   } else {
+    count = c.progress;
     body = `${c.progress}/${c.need} — reward ${c.reward.toLocaleString('en-US')} cr`;
   }
-  return { id: `contract-${c.id}`, title: c.title, body, contract: true };
+  return { id: `contract-${c.id}-${count}`, title: c.title, body, contract: true };
+}
+
+/** Pick which job the HUD follows. */
+export function track(player, id) {
+  player.tracked = player.contracts.some((c) => c.id === id) ? id : null;
 }
 
 export function stationName(id) {

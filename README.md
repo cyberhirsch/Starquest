@@ -14,7 +14,7 @@ npm start          # serves on http://localhost:8080
 ```
 
 Then open <http://localhost:8080>. No build step, no dependencies — it is ES modules
-and a 60-line static server. Add `?gfx=webgl` or `?gfx=webgpu` to force a backend.
+and a 34-line static server. Add `?gfx=webgl` or `?gfx=webgpu` to force a backend.
 
 ## Install on a phone
 
@@ -46,7 +46,7 @@ you on a blank canvas.
 double-tap to cut to zero. **FIRE** sits under it. Touch anywhere on the right half to
 place the steering stick. `MODE` swaps between the pilot and gunner seats, `TGT`
 cycles contacts, `HAIL` opens a channel to your target, `ACT` docks or boards,
-`INV` opens the loadout.
+`INV` opens the loadout, `MENU` pauses and opens the flight manual.
 
 **Keyboard / mouse** — `W`/`S` throttle (`X` to zero, wheel trims) · mouse steers
 (click to capture the pointer; `A`/`D` and the arrows also work) · `Q`/`E` roll ·
@@ -83,6 +83,9 @@ settled out of your hold the moment you dock, sealed courier freight for the oth
 station, and salvage jobs paid on boarding adrift hulls. Three at a time; the tracked
 one shows on the HUD. Dropping one costs you standing.
 
+The job on the HUD is the one you tracked (TRACK on the CONTRACTS tab), and its
+counter moves as your hold fills.
+
 ## Salvage
 
 Boarding empties a hull's hold. A **salvage cutter** takes the hull itself apart:
@@ -104,15 +107,17 @@ Lock a contact inside 2.6 km and `HAIL` opens a channel — the radio is a way t
 fights you would rather not have, and a way to start ones that pay.
 
 - **Buy your way out.** A pirate closing on you will usually take a tribute. The price
-  scales with what you are worth to them; pay it and they break off. Threatening them
-  works only if you are visibly the bigger ship.
+  scales with what you are worth to them; pay it and they leave you alone for about a
+  minute, hunting someone else instead. Your own turrets hold their fire for the
+  duration, but shoot them yourself and the deal is off. Threatening them works only
+  if you are visibly the bigger ship.
 - **Take without shooting.** Hail a weaker trader and demand their cargo — they read
   the odds and jettison pods rather than die. It is piracy, it is logged, and the
   Authority prices your head accordingly.
 - **Mercy pays.** A hull you left adrift will buy its crew's lives, and the ransom
   often beats what boarding would have got you.
-- **Get scanned.** Authority patrols hail *you*. Contraband in the hold is seized and
-  fined; a clean hold costs you nothing but the time.
+- **Get scanned.** Hail an Authority patrol and submit to a scan: contraband is
+  seized and fined, a clean hold costs nothing but the time. They only look once.
 - **Maydays.** A trader under attack broadcasts for help and names a reward — drive
   the attacker off and it is paid. Rob someone yourself and they will not be calling
   you.
@@ -205,7 +210,7 @@ segments, so they glow identically.
 
 ```
 npm start            # static server
-npm test             # headless integration suite (25 assertions, no browser needed)
+npm test             # headless: 85 integration assertions + 14 render scenarios
 npm run icons        # regenerate PWA icons from the Corsair mesh
 npm run sw           # regenerate the service worker file list + version
 ```

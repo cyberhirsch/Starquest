@@ -110,8 +110,8 @@ export function options(player, world, target) {
     out.push({ id: 'wingForm', label: 'FORM UP ON ME' });
     out.push({ id: 'wingHold', label: 'HOLD POSITION' });
   } else if (target.disabled) {
-    if (!target.looted) {
-      out.push({ id: 'ransom', label: 'DEMAND A PAYOFF', hint: 'PIRACY' });
+    if (!target.rescued) {
+      if (!target.ransomed) out.push({ id: 'ransom', label: 'DEMAND A PAYOFF', hint: 'PIRACY' });
       out.push({ id: 'aid', label: 'CALL IN A RESCUE', hint: 'CLEARS BOUNTY' });
     }
   } else if (target.faction === 'pirate') {
@@ -119,7 +119,7 @@ export function options(player, world, target) {
     out.push({ id: 'threaten', label: 'TELL THEM TO STAND DOWN', hint: lev > 1.25 ? 'THEY MIGHT' : 'THEY WILL LAUGH' });
     out.push({ id: 'taunt', label: 'TAUNT THEM' });
   } else if (target.faction === 'security') {
-    out.push({ id: 'scan', label: 'SUBMIT TO A SCAN' });
+    if (!target.scanned) out.push({ id: 'scan', label: 'SUBMIT TO A SCAN' });
     if (player.wanted > 0) out.push({ id: 'fine', label: `SETTLE ON THE SPOT (${cr(player.wanted * 1.6)} CR)` });
   } else {
     out.push({ id: 'greet', label: 'EXCHANGE PLEASANTRIES' });
@@ -171,6 +171,8 @@ export function choose(player, world, target, id) {
     case 'threaten': {
       if (lev > 1.25 || target.hull / target.stats.hullMax < 0.4) {
         target.angryAt = null;
+        target.target = null;
+        target.paidOff = world.time;     // a bluff that lands buys the same truce
         if (target.ai) { target.ai.state = 'flee'; target.ai.t = 0; }
         return say('...NOT TODAY, THEN. WE ARE LEAVING.', true);
       }
@@ -178,11 +180,16 @@ export function choose(player, world, target, id) {
     }
     case 'taunt':
       target.angryAt = player.ship;
+      target.paidOff = null;             // you just spent the truce
       if (target.ai) { target.ai.state = 'hunt'; target.ai.t = 0; }
       return say(pick(['YOU WILL REGRET THAT.', 'NOTED. FILED. COMING FOR YOU.']));
 
     /* -------------------------------------------------------- security -- */
     case 'scan': {
+      // Once per patrol. Unlimited, it was a free bounty wash: tap SUBMIT TO A
+      // SCAN often enough with a clean hold and any price on your head vanished.
+      if (target.scanned) return say('WE ALREADY LOOKED. MOVE ALONG.');
+      target.scanned = true;
       const illegal = Object.keys(player.ship.cargo).filter((k) => ITEMS[k]?.illegal);
       if (illegal.length) {
         const fine = 1800 + randi(1200);
@@ -246,10 +253,13 @@ export function choose(player, world, target, id) {
 
     /* -------------------------------------------------------- derelicts -- */
     case 'ransom': {
+      // Taking their purse is not the same as emptying their hold: `looted` is
+      // what boarding sets, and stamping it here locked you out of a hull whose
+      // cargo you had never touched (and dropped it from the derelict count).
       const purse = Math.round(target.credits * 0.7);
       player.credits += purse;
       target.credits -= purse;
-      target.looted = true;
+      target.ransomed = true;
       player.wanted += 500;
       world.log(`PAYOFF TAKEN — ${cr(purse)} CR`, 'warn');
       return say('THAT IS EVERYTHING. NOW LEAVE US THE AIR.', true);
@@ -257,7 +267,7 @@ export function choose(player, world, target, id) {
     case 'aid': {
       player.wanted = Math.max(0, player.wanted - 600);
       player.stats.rescued = (player.stats.rescued || 0) + 1;
-      target.looted = true;
+      target.looted = true;      // the crew leaves with the hold
       target.rescued = true;
       world.log(`RESCUE CALLED IN FOR ${target.name}`, 'good');
       return say(pick(CHATTER.saved), true);

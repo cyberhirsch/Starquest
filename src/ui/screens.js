@@ -306,6 +306,13 @@ export class UI {
         this.render(); return;
       }
       case 'dropJob': say(Contracts.abandon(player, arg)); this.render(); return;
+      case 'trackJob': {
+        Contracts.track(player, arg);
+        const c = player.contracts.find((x) => x.id === arg);
+        if (c) this.log(`TRACKING — ${c.title}`, 'info');
+        this.render();
+        return;
+      }
       case 'hire': say(Crew.hire(player, arg, g.world)); this.render(); return;
       case 'fire': say(Crew.dismiss(player, arg, g.world)); this.render(); return;
       case 'sell': say(sellCargo(player, g.market, arg, +(arg2 || 1))); this.render(); return;
@@ -524,14 +531,16 @@ export class UI {
         the moment you accept, so make room first.</p>
       </div>
       <div class="section"><h3>ACTIVE — ${active.length}/${Contracts.MAX_ACTIVE}</h3><div class="list">${
-        active.length ? active.map((c) => `
-        <div class="item on"><span class="grow"><b>${esc(c.title)}</b>
+        active.length ? active.map((c, i) => `
+        <div class="item on"><span class="grow"><b>${
+          (p.tracked ? c.id === p.tracked : i === 0) ? '▸ ' : ''}${esc(c.title)}</b>
           <span class="sub">${progressOf(c)}${c.type === 'courier' || c.type === 'supply'
             ? ` · SETTLES ON DOCKING AT ${esc(c.type === 'courier' ? c.toName : Contracts.stationName(c.station))}` : ''}</span></span>
           <span class="price">${cr(c.reward)}</span>
+          <button class="hbtn" data-do="trackJob" data-arg="${c.id}">TRACK</button>
           <button class="hbtn" data-do="dropJob" data-arg="${c.id}">DROP</button>
         </div>`).join('') : '<div class="item empty">NOTHING ACCEPTED</div>'}</div>
-        <p class="note">Dropping a contract costs you standing with the Authority.</p>
+        <p class="note">TRACK puts a job on the HUD. Dropping one costs you standing with the Authority.</p>
       </div></div>`;
   }
 

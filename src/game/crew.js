@@ -59,8 +59,7 @@ export function syncCrew(player, world) {
     const pos = vaddScaled(v3(), player.ship.pos, qright(v3(), player.ship.quat),
       (i % 2 === 0 ? 1 : -1) * 120);
     vaddScaled(pos, pos, vrandSphere(v3(), 1), rand(30, 5));
-    const s = createShip(c.classId, 'player', { pos, loadout: c.loadout, name: c.name });
-    s.wing = true;
+    const s = createShip(c.classId, 'player', { pos, loadout: c.loadout, name: c.name, wing: true });
     s.ai = { role: 'wing', state: 'form', t: 0, slot: i, orbit: rand(420, 260), sign: i % 2 ? -1 : 1 };
     world.ships.push(s);
   }

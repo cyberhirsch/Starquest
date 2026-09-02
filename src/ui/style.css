@@ -139,9 +139,12 @@ html, body {
 #speedout b { font-size: 15px; color: var(--green); }
 #speedout span { color: var(--dim); margin-left: 4px; }
 
+/* Sits above #touchUI: the stick zone is a big invisible rectangle that reaches
+   down over the top of these buttons, and whichever paints last wins the tap.
+   Before this, the row was simply unpressable wherever the two overlapped. */
 #btnRow {
   position: absolute; right: 14px; bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap;
-  justify-content: flex-end; max-width: 40vw;
+  justify-content: flex-end; max-width: 40vw; z-index: 12;
 }
 .hbtn {
   pointer-events: auto; font: inherit; font-size: 11px; letter-spacing: 0.1em;
@@ -308,7 +311,13 @@ body.touch #log { left: 84px; bottom: auto; top: 34px; width: 20vw; flex-directi
 body.touch #objective { width: min(340px, 36vw); }
 body.touch #log div { animation: logIn 0.18s forwards, logOut 0.7s 5s forwards; }
 body.touch #speedout { left: 92px; top: auto; bottom: 16px; }
-body.touch #btnRow { bottom: max(12px, env(safe-area-inset-bottom)); right: max(12px, env(safe-area-inset-right)); }
+/* One row, never two: a wrapped second line climbs into the stick area and
+   pushes the weapon strip and vitals off their marks. */
+body.touch #btnRow {
+  bottom: max(12px, env(safe-area-inset-bottom)); right: max(12px, env(safe-area-inset-right));
+  flex-wrap: nowrap; max-width: 52vw;
+}
+body.touch #btnRow .hbtn { padding: 9px 9px; font-size: 10px; }
 body.touch #weapons { bottom: 74px; }
 body.touch #vitals { bottom: 102px; min-width: 200px; }
 body.touch #prompt { top: 22%; }

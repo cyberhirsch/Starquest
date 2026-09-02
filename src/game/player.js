@@ -63,6 +63,7 @@ export class Player {
     this.contracts = [];
     this.crew = [];
     this.distress = null;
+    this.tracked = null;                            // the contract on the HUD
     this.lastSaved = 0;
     this.stats = { kills: 0, mined: 0, rocks: 0, boarded: 0, earned: 0, docked: 0 };
     this.vouchers = {};                             // classId -> discount claims from boarding
@@ -154,6 +155,7 @@ export class Player {
       active: this.active, storage: this.storage, stats: this.stats,
       vouchers: this.vouchers, cargo: this.ship ? this.ship.cargo : {},
       tutorial: this.tutorial, sector: this.sector, contracts: this.contracts, crew: this.crew,
+      tracked: this.tracked, assist: this.assist, mode: this.mode,
     };
   }
 
@@ -186,6 +188,9 @@ export class Player {
       p.tutorial = d.tutorial || { step: 0, done: false };
       p.sector = d.sector || 'halcyon';
       p.contracts = d.contracts || [];
+      p.tracked = d.tracked || null;
+      if (typeof d.assist === 'boolean') p.assist = d.assist;
+      if (d.mode === 'pilot' || d.mode === 'gunner') p.mode = d.mode;
       p.crew = d.crew || [];
       p._cargo = d.cargo || {};
       p.lastSaved = Date.now();

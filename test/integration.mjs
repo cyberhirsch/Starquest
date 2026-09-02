@@ -414,6 +414,159 @@ section('DISTRESS');
   ok('and the call clears', player.distress === null);
 }
 
+/* --------------------------------------------------------------- repairs */
+// One assertion per bug the code sweep turned up, so none of them come back.
+section('REGRESSIONS');
+{
+  // A tribute used to buy about 16 ms of peace: findPrey re-picked the player on
+  // the next tick and the flee-exit flipped a healthy hull straight back to hunt.
+  const pirate = world.spawnPirate();
+  pirate.pos = v3(...player.ship.pos); pirate.pos[2] += 500;
+  pirate.hull = pirate.stats.hullMax;
+  pirate.ai = { role: 'pirate', state: 'hunt', t: 0, orbit: 380, sign: 1 };
+  pirate.target = player.ship; pirate.angryAt = player.ship;
+  player.credits = 90000;
+  Comms.choose(player, world, pirate, 'tribute');
+  step(240);
+  ok('a tribute actually holds', pirate.target !== player.ship && pirate.angryAt !== player.ship,
+    `target ${pirate.target?.name || 'none'} after 4 s`);
+  // They may well go and hunt someone else — the deal was only that they leave
+  // you alone. What used to happen is that they re-acquired the player within a
+  // frame, so that is what this watches for.
+  let reacquired = 0;
+  for (let i = 0; i < 60 * 30; i++) {
+    world.update(1 / 60);
+    if (pirate.target === player.ship || pirate.angryAt === player.ship) reacquired++;
+  }
+  ok('and they never come back for you inside the truce', reacquired === 0,
+    `${reacquired} frames locked on across 30 s`);
+
+  // ...but shooting someone you paid off voids it.
+  damageShip(pirate, 5, world, { from: player.ship });
+  ok('shooting them voids the truce', pirate.paidOff === null);
+  pirate.dead = true;
+}
+{
+  // Ransom used to stamp `looted`, locking you out of a hold you never touched.
+  const hulk = world.spawnDerelict();
+  hulk.credits = 4000;
+  Comms.choose(player, world, hulk, 'ransom');
+  ok('a ransom leaves the hold alone', !hulk.looted && hulk.ransomed);
+  ok('and the hull is still boardable', boardBlocker(player, hulk) !== 'HOLD ALREADY STRIPPED',
+    boardBlocker(player, hulk) || 'boardable');
+  ok('but they will not pay twice',
+    !Comms.options(player, world, hulk).some((o) => o.id === 'ransom'));
+
+  // A wreck has nobody at the radio and is not a licensed hull.
+  const wanted0 = player.wanted;
+  world.provoke(hulk);
+  ok('a derelict broadcasts no distress call', player.wanted === wanted0);
+  hulk.hull = 1;
+  damageShip(hulk, 500, world, { from: player.ship });
+  ok('and finishing one is not an unlawful kill', player.wanted === wanted0,
+    `wanted ${player.wanted}`);
+}
+{
+  // Scanning was a free bounty wash: 300 off per tap, no cooldown.
+  const sec = world.spawnSecurity();
+  player.wanted = 5000;
+  Comms.choose(player, world, sec, 'scan');
+  const after = player.wanted;
+  Comms.choose(player, world, sec, 'scan');
+  ok('a patrol only scans you once', player.wanted === after, `${after} wanted, unchanged`);
+  ok('and stops offering', !Comms.options(player, world, sec).some((o) => o.id === 'scan'));
+  sec.dead = true;
+  player.wanted = 0;
+}
+{
+  // The HUD card froze at accept time because its id never changed.
+  player.contracts = [];
+  const supply = { id: 'c999', type: 'supply', need: 20, progress: 0, item: 'iron',
+    title: 'SUPPLY — 20 IRON', reward: 5000, station: 'halcyon-depot' };
+  Contracts.accept(player, supply, world);
+  const before = Contracts.tracked(player, world);
+  addCargo(player.ship, 'iron', 3);
+  const after = Contracts.tracked(player, world);
+  ok('the tracked card repaints as the hold fills', before.id !== after.id,
+    `${before.id} -> ${after.id}`);
+  player.contracts = [];
+  addCargo(player.ship, 'iron', -3);
+
+  // Ids restart at c1 on reload while saved jobs keep theirs.
+  const fresh = new Player();
+  fresh.contracts = [{ id: 'c7' }, { id: 'c12' }];
+  Contracts.reseed(fresh);
+  const board = Contracts.rollBoard(world, fresh);
+  ok('a reissued board cannot collide with a saved job',
+    board.every((c) => !fresh.contracts.some((a) => a.id === c.id)),
+    board.map((c) => c.id).join(','));
+}
+{
+  // Wing hulls are AI-flown, so they take the AI cap; their kills used to pay
+  // nothing at all.
+  player.credits = 60000;
+  Crew.hire(player, 'wingCorsair', world);
+  Crew.syncCrew(player, world);
+  const wingman = world.ships.find((s) => s.wing);
+  ok('a wing hull takes the computer speed cap', !!wingman && wingman.stats.maxSpeed <= 150,
+    `${wingman?.stats.maxSpeed.toFixed(0)} m/s`);
+  const cr0 = player.credits, kills0 = player.stats.kills;
+  let victim = null;
+  // A wounded pirate has a 35% chance of surrendering rather than exploding, so
+  // shoot until one actually dies — surrender is a different code path.
+  for (let i = 0; i < 30 && !(victim && victim.dead); i++) {
+    victim = world.spawnPirate();
+    victim.hull = 1; victim.shield = 0;
+    damageShip(victim, 999, world, { from: wingman });
+    if (!victim.dead) victim.disabled = true;
+  }
+  ok('a wing kill pays a share', victim.dead && player.credits > cr0,
+    `+${player.credits - cr0} cr`);
+  ok('and counts as a kill', player.stats.kills === kills0 + 1,
+    `${player.stats.kills - kills0} logged`);
+}
+{
+  // Cinder has seven permanent hulks against a civilian quota of two, so the
+  // old count (everything not pirate or security) never let another trader in.
+  world.jumpTo('cinder');
+  world.traderTimer = 0;
+  const civ0 = world.ships.filter((s) => s.ai && (s.ai.role === 'trader' || s.ai.role === 'miner')).length;
+  world.director(0.1);
+  const civ1 = world.ships.filter((s) => s.ai && (s.ai.role === 'trader' || s.ai.role === 'miner')).length;
+  ok('a graveyard sector still restocks its traders', civ1 >= civ0,
+    `${civ0} -> ${civ1} with ${world.ships.filter((s) => s.disabled).length} hulks adrift`);
+  world.jumpTo('halcyon');
+}
+{
+  // Beams billed per frame, so a 120 Hz phone mined twice as fast for free.
+  const rig = (hz) => {
+    const s = createShip('prospector', 'civilian', { loadout: { hardpoints: ['mining1'], utility: [] } });
+    const w = new World(new Player());
+    w.player.ship = s; w.ships.push(s);
+    s.pos = v3(0, 0, 0); s.energy = 1e6;
+    const rock = w.spawnAsteroid({ pos: v3(0, 0, -300), size: 40 });
+    w.grid.rebuild(w.asteroids);      // fireBeam probes the grid, update() fills it
+    const hp0 = rock.hp;
+    for (let i = 0; i < hz; i++) {
+      s.hardpoints[0].cd = 0;
+      fireMount(s, s.hardpoints[0], v3(0, 0, -1), w, null, 1 / hz);
+    }
+    return hp0 - rock.hp;
+  };
+  const at60 = rig(60), at120 = rig(120);
+  ok('one second of mining is one second of mining at any frame rate',
+    Math.abs(at120 - at60) / at60 < 0.02, `${at60.toFixed(1)} at 60 Hz vs ${at120.toFixed(1)} at 120 Hz`);
+}
+{
+  // The tutorial jumped from a ~4,800 cr first sale to a 6,500 cr turret.
+  const t = new (await import('../src/game/tutorial.js')).Tutorial(new Player());
+  const ids = [];
+  while (t.active) { ids.push(t.step.id); t.state.step++; }
+  ok('the tutorial funds the turret before asking for it',
+    ids.indexOf('earn') > ids.indexOf('sell') && ids.indexOf('earn') < ids.indexOf('turret'),
+    ids.join(' -> '));
+}
+
 /* ------------------------------------------------------------ simulation */
 section('SOAK');
 {

@@ -58,6 +58,8 @@ export function createShip(classId, faction = 'civilian', opts = {}) {
     disabled: false, dead: false, looted: false,
     lastHitBy: null, lastHitAt: -99, deadAt: 0, flash: 0,
     ai: null, target: null,
+    // Set before recalc, because recalc reads it to decide the speed cap.
+    wing: !!opts.wing,
     scale: cls.scale ?? 1,
     radius: cls.radius,
     beam: null,                       // active mining beam endpoint, for rendering
@@ -118,7 +120,10 @@ export function recalc(ship, refill = false) {
   // down. Without this a fleeing Corsair does 271 m/s against a starter
   // shuttle's 176 and the chase is arithmetically unwinnable. Player-owned
   // hulls keep their full rating, so buying a fast ship still means something.
-  if (ship.faction !== 'player') {
+  // Hired wingmen carry faction 'player' so the HUD and isHostile treat them as
+  // yours, but a computer flies them, so they take the cap as well — otherwise a
+  // wing Corsair did 271 m/s and outran the hull it was escorting.
+  if (ship.faction !== 'player' || ship.wing) {
     s.maxSpeed = Math.min(s.maxSpeed * 0.72, AI_TOP_SPEED);
     s.accel *= 0.9;
   }
@@ -224,7 +229,7 @@ export function mountWorldPos(out, ship, hp) {
 }
 
 /** Fire one hardpoint down `dir`. Returns true when a shot went out. */
-export function fireMount(ship, hp, dir, world, forceTarget = null) {
+export function fireMount(ship, hp, dir, world, forceTarget = null, dt = 1 / 60) {
   const m = MODULES[hp.moduleId];
   if (!m || hp.cd > 0) return false;
   if (ship.energy < m.energy * (m.beam ? 0.2 : 1)) return false;
@@ -232,10 +237,12 @@ export function fireMount(ship, hp, dir, world, forceTarget = null) {
   vnorm(_dir, dir);
 
   if (m.beam) {
-    ship.energy -= m.energy * (1 / 60);
+    // Beams bill by the second, not the frame. Hardcoding 1/60 made a 120 Hz
+    // phone mine and cut twice as fast for the same energy as a 60 Hz one.
+    ship.energy -= m.energy * dt;
     hp.cd = 0;
     hp.firing = true;
-    world.fireBeam(ship, hp, m, _muzzle, _dir);
+    world.fireBeam(ship, hp, m, _muzzle, _dir, dt);
     return true;
   }
 
@@ -289,7 +296,7 @@ export function updateTurrets(ship, world, dt) {
     qforward(_f, ship.quat);
     if (vdot(hp.aim, _f) < Math.cos((m.arc || 2.6) / 2 + 0.35)) continue;   // outside the arc
     if (vdot(hp.aim, _dir) < 0.995) continue;                               // still slewing
-    fireMount(ship, hp, hp.aim, world, t);
+    fireMount(ship, hp, hp.aim, world, t, dt);
   }
 }
 
@@ -301,9 +308,13 @@ export function damageShip(ship, amount, world, opts = {}) {
   ship.lastHitAt = world.time;
   ship.flash = 1;
   if (opts.from) ship.lastHitBy = opts.from;
+  // The deal was that you leave them alone.
+  if (ship.paidOff != null && opts.from && opts.from.faction === 'player') ship.paidOff = null;
   if (opts.ion) {
     ship.ion += opts.ion;
-    if (ship.ion > 40 && !ship.disabled && !isPlayer) disableShip(ship, world);
+    // Nothing in the game re-powers a hull, so an ion-disabled wingman was
+    // adrift for good with no way to recover them. They ride it out like you do.
+    if (ship.ion > 40 && !ship.disabled && !isPlayer && !ship.wing) disableShip(ship, world);
   }
   let dmg = amount * (isPlayer ? world.playerDamageScale() : 1);
   const shieldBefore = ship.shield;
@@ -377,6 +388,7 @@ export function destroyShip(ship, world, killer) {
   }
   if (ship.wing) world.onWingLost?.(ship);
   if (killer === world.player.ship) world.onPlayerKill(ship);
+  else if (killer?.wing) world.onWingKill(ship, killer);
 }
 
 /** Direction the pilot's own gun points (ship nose or free-look turret). */

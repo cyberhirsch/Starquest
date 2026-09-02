@@ -13,7 +13,7 @@ import {
   createShip, flyShip, regen, updateTurrets, damageShip, destroyShip, disableShip,
   addCargo, cargoFree, recalc, salvagePool,
 } from './ship.js';
-import { runAI } from './ai.js';
+import { runAI, inTruce } from './ai.js';
 
 export const SECTOR_R = 5200;
 
@@ -208,6 +208,7 @@ export class World {
       addCargo(s, id, randi(n) + 3);
     }
     s.disabled = true;
+    s.hulk = true;              // it was already a wreck; killing it is not a kill
     s.salvage = salvagePool(s);
     s.hull = s.stats.hullMax * rand(0.3, 0.08);
     s.shield = 0;
@@ -340,7 +341,7 @@ export class World {
   }
 
   /** Continuous beam weapon: instant hit test, kept alive for one frame. */
-  fireBeam(ship, hp, module, origin, dir) {
+  fireBeam(ship, hp, module, origin, dir, dt = 1 / 60) {
     const range = module.range;
     let best = null, bestT = range, bestKind = null;
     this.grid.near(origin, range + 60, this._near);
@@ -357,7 +358,6 @@ export class World {
     this.beams.push({ a: vcopy(v3(), origin), b: end, color: module.color, hit: !!best });
     if (!best) return;
 
-    const dt = 1 / 60;
     if (bestKind === 'asteroid') {
       this.mineAsteroid(best, module, ship, dt, end);
     } else if (module.cut) {
@@ -543,9 +543,14 @@ export class World {
       }
       if (best) return best;
     }
+    const mine = ship === this.player.ship || ship.wing;
     for (const s of this.ships) {
       if (s === ship || s.dead || s.disabled) continue;
       if (!this.isHostile(ship, s)) continue;
+      // Your own turrets held their fire for nobody, so the pirate you had just
+      // paid off was shot by your hull, which voided the truce you bought. They
+      // stay off a ship under truce unless it is coming for you anyway.
+      if (mine && inTruce(s, this) && s.target !== this.player.ship) continue;
       const d = vdist2(ship.pos, s.pos);
       if (d < bestD) { bestD = d; best = s; }
     }
@@ -588,10 +593,31 @@ export class World {
       this.player.credits += bounty;
       this.player.wanted = Math.max(0, this.player.wanted - 150);
       this.log(`BOUNTY PAID +${bounty} CR — ${ship.name} DESTROYED`, 'good');
-    } else {
+    } else if (!ship.hulk) {
       const fine = ship.faction === 'security' ? 4000 : 1800;
       this.player.wanted += fine;
       this.log(`UNLAWFUL KILL — BOUNTY ON YOU +${fine} CR`, 'danger');
+    }
+    this.onKill?.(ship);
+    this.onContractKill?.(ship);
+  }
+
+  /**
+   * A hired pilot landed the killing shot. You hired them and you answer for
+   * them, so the fine is yours in full — but the bounty is split, or a wing
+   * would out-earn flying yourself.
+   */
+  onWingKill(ship, by) {
+    this.player.stats.kills++;
+    if (ship.faction === 'pirate') {
+      const bounty = Math.round((600 + ship.cls.price * 0.05) * 0.5);
+      this.player.credits += bounty;
+      this.player.wanted = Math.max(0, this.player.wanted - 75);
+      this.log(`${by.name} SPLASHED ${ship.name} — YOUR SHARE +${bounty} CR`, 'good');
+    } else if (!ship.hulk) {
+      const fine = ship.faction === 'security' ? 4000 : 1800;
+      this.player.wanted += fine;
+      this.log(`YOUR WING MADE AN UNLAWFUL KILL — BOUNTY +${fine} CR`, 'danger');
     }
     this.onKill?.(ship);
     this.onContractKill?.(ship);
@@ -717,6 +743,9 @@ export class World {
   /** Shooting a neutral makes it — and the law — take an interest. */
   provoke(ship) {
     if (ship.faction === 'pirate' || ship.faction === 'player') return;
+    // A hull with its power down has nobody at the radio. Shooting the wreck
+    // graveyard used to file a distress call and price your head for each one.
+    if (ship.disabled || ship.dead) return;
     if (ship.angryAt !== this.player.ship) {
       ship.angryAt = this.player.ship;
       if (ship.ai) { ship.ai.state = ship.faction === 'security' ? 'hunt' : 'flee'; ship.ai.t = 0; }
@@ -813,7 +842,11 @@ export class World {
     }
     if (this.traderTimer <= 0) {
       this.traderTimer = rand(50, 25);
-      const civ = this.ships.filter((s) => s.faction !== 'pirate' && s.faction !== 'security').length;
+      // Only hulls that actually fly the lanes count. Counting derelicts, the
+      // player and the wing meant Cinder (7 permanent hulks, quota 2) never
+      // spawned another trader or miner for the whole session.
+      const civ = this.ships.filter((s) => !s.dead && !s.disabled && s.ai
+        && (s.ai.role === 'trader' || s.ai.role === 'miner')).length;
       const wantCiv = Math.round(6 * (this.sector?.traders ?? 1));
       if (civ < wantCiv) (Math.random() < 0.5 ? this.spawnTrader() : this.spawnMiner()).ai.t = 0;
     }

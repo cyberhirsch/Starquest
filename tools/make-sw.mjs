@@ -38,18 +38,18 @@ self.addEventListener('activate', (e) => {
     .then(() => self.clients.claim()));
 });
 
-// Cache first — the game must run with no signal at all — then refresh in the
-// background so the next launch picks up a new build.
+// Network first, cache as the fallback. Cache-first served the build before
+// last on every launch, which made shipped fixes look like they had not
+// shipped; the cache is still complete, so the game runs with no signal at all.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-  e.respondWith(caches.match(req).then((hit) => {
-    const net = fetch(req).then((res) => {
+  e.respondWith(
+    fetch(req).then((res) => {
       if (res && res.ok) caches.open(VERSION).then((c) => c.put(req, res.clone()));
       return res;
-    }).catch(() => hit);
-    return hit || net;
-  }));
+    }).catch(() => caches.match(req).then((hit) => hit || Promise.reject(new Error('offline')))),
+  );
 });
 `);
 console.log(`sw.js -> ${version}, ${files.length + 1} entries`);

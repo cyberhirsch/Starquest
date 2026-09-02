@@ -30,27 +30,39 @@ export function steerTo(ship, pos, control, gain) {
 }
 
 /** Fire every pilot-operated mount that is lined up on the target. */
-function shoot(ship, world, target, err, dist) {
+function shoot(ship, world, target, err, dist, dt) {
   for (const hp of ship.hardpoints) {
     const m = MODULES[hp.moduleId];
     if (!m || m.mount !== 'manual') continue;
     if (dist > (m.range || 1200) * 0.95) continue;
     if (m.beam) {
-      if (err < 0.09) fireMount(ship, hp, qforward(_tmp, ship.quat), world, target);
+      if (err < 0.09) fireMount(ship, hp, qforward(_tmp, ship.quat), world, target, dt);
       continue;
     }
     mountWorldPos(_mz, ship, hp);
     leadTarget(_lead, _mz, target.pos, target.vel || [0, 0, 0], m.speed);
     vsub(_dir, _lead, _mz);
     vnorm(_dir, _dir);
-    if (vdot(_dir, qforward(_tmp, ship.quat)) > 0.985) fireMount(ship, hp, _dir, world, target);
+    if (vdot(_dir, qforward(_tmp, ship.quat)) > 0.985) fireMount(ship, hp, _dir, world, target, dt);
   }
 }
 
-function findPrey(ship, world) {
+/**
+ * How long a bought-off or bluffed pirate leaves you alone. Without this the
+ * money bought nothing: findPrey re-picked the player on the very next tick and
+ * combat()'s flee-exit flipped a healthy hull straight back to hunting, so a
+ * tribute was ~16 ms of peace. Shooting them voids it (see damageShip).
+ */
+export const TRUCE = 75;
+
+export const inTruce = (ship, world) =>
+  ship.paidOff != null && world.time - ship.paidOff < TRUCE;
+
+function findPrey(ship, world, truce = false) {
   let best = null, bestD = Infinity;
   for (const s of world.ships) {
     if (s === ship || s.dead || s.disabled) continue;
+    if (truce && s === world.player.ship) continue;   // we took your money
     if (!world.isHostile(ship, s)) continue;
     const d = vlen2(vsub(_tmp, s.pos, ship.pos));
     const bias = s === world.player.ship ? 0.45 : 1;   // pirates prefer the player
@@ -88,9 +100,13 @@ export function runAI(ship, world, dt) {
 
 function combat(ship, world, dt, control, fleeAt) {
   const ai = ship.ai;
+  const truce = inTruce(ship, world);
+  if (truce && ship.target === world.player.ship) ship.target = null;
   if (!ship.target || ship.target.dead || ship.target.disabled || ai.t > 4) {
     ai.t = 0;
-    ship.target = ship.angryAt && !ship.angryAt.dead ? ship.angryAt : findPrey(ship, world);
+    const grudge = ship.angryAt && !ship.angryAt.dead
+      && !(truce && ship.angryAt === world.player.ship) ? ship.angryAt : null;
+    ship.target = grudge || findPrey(ship, world, truce);
   }
   const t = ship.target;
   if (!t) {   // idle patrol
@@ -113,7 +129,10 @@ function combat(ship, world, dt, control, fleeAt) {
     vnorm(_dir, _dir);
     steer(ship, _dir, control, 1.6);
     control.throttle = 1;
-    if (dist > 2600 || hullFrac > fleeAt + 0.25) ai.state = 'hunt';
+    // A truce keeps them running until it lapses; otherwise distance or a
+    // recovered hull turns them around.
+    if (!(truce && t === world.player.ship)
+      && (dist > 2600 || hullFrac > fleeAt + 0.25)) ai.state = 'hunt';
     return;
   }
 
@@ -132,7 +151,7 @@ function combat(ship, world, dt, control, fleeAt) {
 
   vnorm(_lead, vsub(_lead, t.pos, ship.pos));
   const aimErr = Math.acos(clamp(vdot(qforward(_tmp, ship.quat), _lead), -1, 1));
-  shoot(ship, world, t, aimErr, dist);
+  shoot(ship, world, t, aimErr, dist, dt);
 }
 
 /** Hired guns: hold formation on the player, break to fight what threatens them. */
@@ -220,7 +239,7 @@ function miner(ship, world, dt, control) {
   if (dist < 380 && err < 0.14 && cargoFree(ship) > 0) {
     for (const hp of ship.hardpoints) {
       const m = MODULES[hp.moduleId];
-      if (m && m.beam) fireMount(ship, hp, qforward(_tmp, ship.quat), world, ai.rock);
+      if (m && m.beam) fireMount(ship, hp, qforward(_tmp, ship.quat), world, ai.rock, dt);
     }
   }
 }

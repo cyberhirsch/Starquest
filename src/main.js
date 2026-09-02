@@ -47,6 +47,10 @@ async function start() {
   const batch = new LineBatch(70000);
   const restored = Player.load();
   const player = restored || new Player();
+  // Saved jobs keep their ids while the module counter restarts at c1, so the
+  // board has to be told how far it already got or a fresh offer collides with
+  // a job you are carrying and never shows up.
+  Contracts.reseed(player);
   const world = new World(player);
 
   const game = {
@@ -163,6 +167,9 @@ async function start() {
   function jumpThrough(gate) {
     player.save();
     world.jumpTo(gate.to);
+    // The victim and their attacker were left behind in the old sector, so the
+    // call could never resolve and blocked the next one for its full 180 s.
+    player.distress = null;
     player.sector = gate.to;
     Crew.syncCrew(player, world);
     player.target = null;
@@ -241,6 +248,7 @@ async function start() {
     player.ship.dead = false;
     player.ship.disabled = false;
     player.target = null;
+    player.distress = null;
     if (!world.ships.includes(player.ship)) world.ships.push(player.ship);
     ui.close();
     ui.log('NEW HULL ISSUED — INSURANCE TOOK ITS CUT', 'warn');
@@ -342,7 +350,7 @@ async function start() {
     if (!input.fire || ship.disabled || ship.dead) return;
     qforward(_f, camQuat);
     const before = ship.energy;
-    if (fireMount(ship, hp, _f, world, player.target)) {
+    if (fireMount(ship, hp, _f, world, player.target, dt)) {
       if (m.beam) { if (Math.random() < 0.12) audio.turret(); }
       else if (m.dmg > 40) audio.rail();
       else audio.laser();

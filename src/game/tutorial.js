@@ -61,6 +61,16 @@ const STEPS = [
     done: (g) => oreInHold(g.player.ship) === 0 && g.player.stats.earned > 0,
   },
   {
+    // A full shuttle hold of iron sells for about 4,800, so the old jump
+    // straight from the first sale to a 6,500 cr turret left the card sitting
+    // there with no way to satisfy it and no hint that another run was needed.
+    id: 'earn',
+    title: 'RAISE 6,500 CR',
+    touch: 'A turret costs 6,500. Fly another load out to the belt, or take a job from the CONTRACTS tab and track it.',
+    keys: 'A turret costs 6,500. Mine another load, or take a job from the CONTRACTS tab and track it.',
+    done: (g) => g.player.credits >= 6500 || hasAutoTurret(g.player.ship),
+  },
+  {
     id: 'turret',
     title: 'FIT AN AUTO-TURRET',
     touch: 'You can only man one mount at a time. Buy an AUTO-TURRET MK I in OUTFITTING, then fit it on the LOADOUT tab — it fires on hostiles while you fly.',
