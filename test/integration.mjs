@@ -10,7 +10,7 @@ import { MODULES } from '../src/game/data.js';
 import * as Contracts from '../src/game/contracts.js';
 import * as Crew from '../src/game/crew.js';
 import * as Comms from '../src/game/comms.js';
-import { v3, vsub, vnorm, vdist, qlook } from '../src/core/math.js';
+import { v3, vsub, vnorm, vdist, vlen as vlen3, qlook } from '../src/core/math.js';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => {
@@ -227,9 +227,21 @@ section('SECTORS AND TRADE');
   ok('the player is carried through', world.ships.includes(player.ship));
   const derelicts = world.ships.filter((s) => s.disabled && !s.dead).length;
   ok('the reach is full of adrift hulls', derelicts >= 5, `${derelicts} adrift`);
-  const goldAway = world.station.market.sellPrice('gold');
-  ok('the two stations pay differently for ore', goldAway > goldHome * 1.2,
-    `${goldHome} vs ${goldAway} cr`);
+  // The invariant the trade route rests on is that Cinder always pays more for
+  // ore — not that any single roll clears a fixed margin. Drift of +/-14% on
+  // both ends means one sample beats 1.2x only about 88% of the time, which is
+  // a flaky assertion, not a broken route.
+  const away = world.station.market;
+  let holds = 0, best = 0;
+  for (let i = 0; i < 200; i++) {
+    away.roll(); homeMarket.roll();
+    const r = away.sellPrice('gold') / homeMarket.sellPrice('gold');
+    if (r > 1) holds++;
+    best = Math.max(best, r);
+  }
+  ok('the ore route never runs backwards', holds === 200, `${holds}/200 rolls pay more at the yard`);
+  ok('and is worth the trip', best > 1.4, `up to ${best.toFixed(2)}x`);
+  away.roll();
   ok('no shipyard at the scavenger yard', world.station.market.shipyard === false);
   world.jumpTo(here);
   ok('and back again', world.sector.id === here);
@@ -441,9 +453,17 @@ section('REGRESSIONS');
   ok('and they never come back for you inside the truce', reacquired === 0,
     `${reacquired} frames locked on across 30 s`);
 
-  // ...but shooting someone you paid off voids it.
-  damageShip(pirate, 5, world, { from: player.ship });
-  ok('shooting them voids the truce', pirate.paidOff === null);
+  // A turret round straying through them does not undo what you paid for,
+  // however much of it lands — you did not aim it.
+  pirate.truceHits = 0;
+  damageShip(pirate, pirate.stats.hullMax * 0.5, world, { from: player.ship });
+  ok('your turrets cannot void the truce for you', pirate.paidOff !== null);
+  // Your own gun does, and it takes a burst rather than a graze.
+  damageShip(pirate, 4, world, { from: player.ship, manual: true });
+  ok('nor does one round of your own', pirate.paidOff !== null,
+    `${Math.round(pirate.truceHits)} of ${Math.round(pirate.stats.hullMax * 0.08)} allowed`);
+  damageShip(pirate, pirate.stats.hullMax * 0.2, world, { from: player.ship, manual: true });
+  ok('shooting them in earnest does', pirate.paidOff === null);
   pirate.dead = true;
 }
 {
@@ -565,6 +585,81 @@ section('REGRESSIONS');
   ok('the tutorial funds the turret before asking for it',
     ids.indexOf('earn') > ids.indexOf('sell') && ids.indexOf('earn') < ids.indexOf('turret'),
     ids.join(' -> '));
+}
+
+/* ---------------------------------------------------------- readability */
+section('LEGIBILITY');
+{
+  // Nothing on screen used to say which streaks could hurt you: a pirate's
+  // pulse round was pixel-identical to your own.
+  const foe = world.spawnPirate();
+  foe.pos = v3(...player.ship.pos); foe.pos[2] -= 300;
+  const gun = foe.hardpoints.find((h) => MODULES[h.moduleId] && !MODULES[h.moduleId].beam);
+  gun.cd = 0; foe.energy = 999;
+  world.projectiles.length = 0;
+  fireMount(foe, gun, v3(0, 0, 1), world, player.ship);
+  ok('hostile fire is drawn red', world.projectiles[0]?.color === 'enemyLaser',
+    world.projectiles[0]?.color);
+  world.projectiles.length = 0;
+  const mine = player.ship.hardpoints.find((h) => MODULES[h.moduleId] && !MODULES[h.moduleId].beam);
+  mine.cd = 0; player.ship.energy = 999;
+  fireMount(player.ship, mine, v3(0, 0, -1), world, foe);
+  ok('and your own is not', world.projectiles[0]?.color !== 'enemyLaser',
+    world.projectiles[0]?.color);
+  foe.dead = true;
+}
+{
+  // The death screen used to say only 'YOUR SHIP CAME APART'.
+  world.clearDamageLog();
+  const killer = world.spawnPirate();
+  killer.name = 'THE LAST WORD';
+  killer.pos = v3(...player.ship.pos); killer.pos[2] -= 240;
+  player.ship.hull = player.ship.stats.hullMax;
+  damageShip(player.ship, 90, world, { from: killer, manual: true });
+  damageShip(player.ship, 30, world, { cause: 'collision' });
+  const r = world.deathReport();
+  ok('the death report names who killed you', r.killer === 'THE LAST WORD', String(r.killer));
+  ok('and what took the hull apart, as shares', r.sources.length === 2
+    && r.sources[0].label === 'THE LAST WORD'
+    && r.sources[0].share === 75 && r.sources[1].share === 25,
+    r.sources.map((x) => `${x.label} ${x.share}%`).join(' / '));
+  ok('and offers a way to survive it next time', /HAIL/.test(r.tip));
+  killer.dead = true;
+  world.clearDamageLog();
+}
+{
+  // A pirate could gut a hauler two kilometres off in total silence: only the
+  // player's own fire ever registered, so no NPC ever reacted to an NPC.
+  const hauler = createShip('hauler', 'trader', { pos: v3(2000, 0, 2000), name: 'SLOW PATIENCE' });
+  hauler.ai = { role: 'trader', state: 'travel', t: 0, dest: v3(0, 0, 0) };
+  world.ships.push(hauler);
+  const raider = world.spawnPirate();
+  raider.pos = v3(2100, 0, 2100);
+  damageShip(hauler, 20, world, { from: raider });
+  ok('a trader shot by a pirate knows who did it', hauler.angryAt === raider,
+    hauler.angryAt?.name || 'nobody');
+  ok('and runs', hauler.ai.state === 'flee');
+  hauler.dead = true; raider.dead = true;
+}
+{
+  // Beaten fighters used to sprint away at full rating and then bounce off the
+  // sector wall for ever, so a fight you had won never actually ended.
+  const runner = createShip('corsair', 'pirate', { pos: v3(0, 0, 0) });
+  runner.ai = { role: 'pirate', state: 'flee', t: 0 };
+  const full = runner.stats.maxSpeed;
+  for (let i = 0; i < 600; i++) flyShip(runner, { throttle: 1 }, 1 / 60);
+  const healthy = vlen3(runner.vel);
+  runner.hull = runner.stats.hullMax * 0.1;
+  runner.vel = v3(0, 0, 0);
+  for (let i = 0; i < 600; i++) flyShip(runner, { throttle: 1 }, 1 / 60);
+  const hurt = vlen3(runner.vel);
+  ok('a shot-up runner cannot sprint', hurt < healthy * 0.75,
+    `${healthy.toFixed(0)} m/s healthy vs ${hurt.toFixed(0)} at 10% hull (cap ${full.toFixed(0)})`);
+
+  world.ships.push(runner);
+  runner.pos = v3(0, 0, -6000);           // well past the buoys, still running
+  world.confine(runner, 1 / 60);
+  ok('and one that makes the edge is gone', runner.dead && runner.escaped);
 }
 
 /* ------------------------------------------------------------ simulation */

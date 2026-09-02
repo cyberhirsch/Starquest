@@ -37,6 +37,9 @@ export class UI {
       weapons: document.getElementById('weapons'),
       log: document.getElementById('log'),
       prompt: document.getElementById('prompt'),
+      threat: document.getElementById('threat'),
+      threatName: document.getElementById('threatName'),
+      threatInfo: document.getElementById('threatInfo'),
       speed: document.getElementById('speedVal'),
       vitals: document.getElementById('vitals'),
       hullBar: document.getElementById('hullBar'),
@@ -98,6 +101,26 @@ export class UI {
     this.el.shieldVal.textContent = `${Math.ceil(ship.shield)}/${ship.stats.shieldMax}`;
     this.el.vitals.classList.toggle('hurt', hullFrac < 0.5);
     this.el.vitals.classList.toggle('critical', hullFrac < 0.25);
+
+    // Who is shooting you, in words, near the middle of the canopy. The wedge on
+    // the reticle already gives the bearing; the name only ever reached the
+    // player as a log line on the far side of the screen, throttled to one every
+    // 3.5 s, and gone in five.
+    const hit = world.lastHit;
+    const live = hit && hit.from && !hit.from.dead && world.time - hit.t < 6;
+    if (live) {
+      const d = Math.round(vdist(hit.from.pos, ship.pos));
+      const sig = `${hit.from.id}|${Math.round(d / 50)}`;
+      if (this._threatSig !== sig) {
+        this._threatSig = sig;
+        this.el.threatName.textContent = hit.from.name;
+        this.el.threatInfo.textContent = `${cr(d)} M · ${hit.from.cls.name}`;
+      }
+      this.el.threat.classList.remove('hidden');
+    } else if (!this.el.threat.classList.contains('hidden')) {
+      this._threatSig = null;
+      this.el.threat.classList.add('hidden');
+    }
 
     // weapon strip
     if (this._wepSig !== this.weaponSignature(ship, player)) {
@@ -225,6 +248,17 @@ export class UI {
   }
 
   /** Red edge flash, scaled by how hard the hit landed. */
+  /** One-off strobe on the vitals when the shield finally gives out. */
+  shieldsDown() {
+    const el = this.el.vitals;
+    if (!el) return;
+    el.classList.remove('shieldsdown');
+    void el.offsetWidth;                  // restart the animation
+    el.classList.add('shieldsdown');
+    clearTimeout(this._shieldTimer);
+    this._shieldTimer = setTimeout(() => el.classList.remove('shieldsdown'), 1100);
+  }
+
   flashDamage(strength = 0.5) {
     const el = this.el.hitFlash;
     if (!el) return;
@@ -783,10 +817,20 @@ export class UI {
 
   renderDead() {
     const p = this.game.player;
+    const r = this.game.world.deathReport();
+    const held = Object.entries(p.ship.cargo).filter(([, q]) => q > 0);
+    const lost = held.reduce((n, [, q]) => n + q, 0);
     return `<div class="screen"><header><h2>HULL LOST</h2><div class="spacer"></div></header>
-      <div class="body"><p class="big">YOUR SHIP CAME APART</p>
-      <p class="note">Halcyon Authority recovered your pod. The insurers replaced the hull and kept the
-      cargo — and their fee.</p>
+      <div class="body">
+      <p class="big">${r.killer ? `${esc(r.killer)} KILLED YOU` : 'YOUR SHIP CAME APART'}</p>
+      ${r.killerClass ? `<p class="note">${esc(r.killerClass)}</p>` : ''}
+      <div class="section"><h3>WHAT TOOK YOU APART</h3><div class="list">${
+        r.sources.length ? r.sources.map((x) => `<div class="item"><span class="grow">${esc(x.label)}</span>
+          <span class="price">${x.share}%</span></div>`).join('')
+          : '<div class="item empty">NOTHING ON RECORD</div>'}</div></div>
+      <p class="note">${esc(r.tip)}</p>
+      <p class="note">Halcyon Authority recovered your pod. The insurers replaced the hull, kept
+      ${lost ? `the ${lost} units in your hold` : 'your cargo'} — and took 15% of your credits.</p>
       <div class="list">${[
         ['KILLS', p.stats.kills], ['ROCKS CRACKED', p.stats.rocks],
         ['HULLS BOARDED', p.stats.boarded], ['CREDITS', cr(p.credits)],

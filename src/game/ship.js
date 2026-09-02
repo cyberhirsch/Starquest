@@ -13,6 +13,15 @@ let NEXT_ID = 1;
 /** Ceiling on any computer-flown hull, whatever it has fitted. */
 export const AI_TOP_SPEED = 150;
 
+/** Hull fraction below which a fighter's drives start giving out. */
+const LIMP_AT = 0.35;
+
+/** Fraction of their hull you have to take off, quickly, before a truce is off. */
+const TRUCE_BREAK = 0.08;
+
+/** Seconds over which a truce-breaking tally fades back to nothing. */
+const TRUCE_FORGET = 4;
+
 /** Mount positions, spread over the hull so turret fire visibly converges. */
 function hardpointOffsets(cls) {
   const r = cls.radius;
@@ -182,7 +191,13 @@ export function flyShip(ship, control, dt) {
   qforward(_f, ship.quat);
   const th = dead ? 0 : clamp(control.throttle ?? ship.throttle, -1, 1);
   ship.throttle = th;
-  const accel = th >= 0 ? s.accel * th : s.accel * th * s.reverse;
+  // A hull shot to pieces does not sprint away at full rating. Fighters that
+  // break off lose drive power as they lose hull, so a fight you are winning
+  // ends with a catch or a kill instead of a stern chase you cannot close.
+  const role = ship.ai?.role;
+  const limp = !dead && ship.faction !== 'player' && (role === 'pirate' || role === 'security')
+    ? lerp(0.55, 1, clamp(ship.hull / s.hullMax / LIMP_AT, 0, 1)) : 1;
+  const accel = (th >= 0 ? s.accel * th : s.accel * th * s.reverse) * limp;
   vaddScaled(ship.vel, ship.vel, _f, accel * dt);
 
   if (ship.assist && !dead) {
@@ -195,7 +210,8 @@ export function flyShip(ship, control, dt) {
     vscale(_tmp, _f, along);                             // forward component is kept
     vadd(ship.vel, _lat, _tmp);
     const sp = vlen(ship.vel);
-    if (sp > s.maxSpeed) vscale(ship.vel, ship.vel, s.maxSpeed / sp);
+    const cap = s.maxSpeed * limp;
+    if (sp > cap) vscale(ship.vel, ship.vel, cap / sp);
   } else {
     vscale(ship.vel, ship.vel, Math.exp(-0.02 * dt));
     const sp = vlen(ship.vel);
@@ -309,7 +325,34 @@ export function damageShip(ship, amount, world, opts = {}) {
   ship.flash = 1;
   if (opts.from) ship.lastHitBy = opts.from;
   // The deal was that you leave them alone.
-  if (ship.paidOff != null && opts.from && opts.from.faction === 'player') ship.paidOff = null;
+  // The deal was that you leave them alone — but a single stray round from one
+  // of your own turrets, aimed at somebody else, should not undo what you paid
+  // for. It takes real damage to convince them the truce is off.
+  // Only fire you actually aimed counts. Your auto-turrets already hold off a
+  // ship under truce, but their rounds still stray through one on the way to
+  // somebody else — and having the money you spent undone by a gun you cannot
+  // aim is the same complaint as the pirate ignoring the tribute in the first
+  // place. Decayed rather than cumulative, so it takes a burst, not a graze.
+  if (ship.paidOff != null && opts.manual && opts.from && opts.from.faction === 'player') {
+    const gap = world.time - (ship.truceHitAt ?? world.time);
+    ship.truceHits = (ship.truceHits || 0) * Math.exp(-gap / TRUCE_FORGET) + amount;
+    ship.truceHitAt = world.time;
+    if (ship.truceHits > ship.stats.hullMax * TRUCE_BREAK) {
+      ship.paidOff = null;
+      ship.angryAt = opts.from === world.player.ship ? opts.from : world.player.ship;
+      if (ship.ai) { ship.ai.state = 'hunt'; ship.ai.t = 0; }
+      world.log(`${ship.name}: SO MUCH FOR THAT, THEN.`, 'danger');
+    }
+  }
+  // A civilian shot by anyone runs from them. Only the player's fire used to
+  // register (through world.provoke), so a pirate could gut a hauler two
+  // kilometres off in total silence and the hauler kept flying its route.
+  if (opts.from && opts.from !== ship && !opts.from.dead && !isPlayer
+    && (ship.faction === 'trader' || ship.faction === 'civilian')
+    && (!ship.angryAt || ship.angryAt.dead)) {
+    ship.angryAt = opts.from;
+    if (ship.ai) { ship.ai.state = 'flee'; ship.ai.t = 0; }
+  }
   if (opts.ion) {
     ship.ion += opts.ion;
     // Nothing in the game re-powers a hull, so an ion-disabled wingman was

@@ -127,6 +127,30 @@ html, body {
 @keyframes logIn { to { opacity: 0.92; } }
 @keyframes logOut { to { opacity: 0; } }
 
+/* Names the hull that is hurting you. Top-centre, where warnings belong: a
+   landscape phone has no clear band between the reticle and the vitals, and the
+   wedge on the reticle already carries the bearing. Slides below the objective
+   card on the rare occasion both are up. */
+#threat {
+  position: absolute; left: 0; right: 0; margin-inline: auto; top: 36px; width: fit-content;
+  max-width: 52vw; padding: 5px 14px; text-align: center; z-index: 11;
+  border: 1px solid rgba(255, 91, 71, 0.6); background: rgba(38, 8, 4, 0.62);
+  animation: threatIn 0.22s ease-out;
+}
+#objective:not(.hidden) ~ #threat { top: 156px; }
+#threat b { display: block; color: var(--red); font-size: 12px; letter-spacing: 0.16em;
+  text-shadow: 0 0 12px rgba(255, 91, 71, 0.7); }
+#threat span { display: block; margin-top: 2px; color: #d08a7c; font-size: 9.5px; }
+@keyframes threatIn { from { opacity: 0; transform: translateY(-4px); } }
+body.touch #threat { font-size: 10px; max-width: 46vw; }
+
+/* Shields going down is the moment before the hull starts taking it. */
+#vitals.shieldsdown { animation: shieldGone 0.5s 2; }
+@keyframes shieldGone {
+  0%, 100% { border-color: rgba(108, 255, 159, 0.28); }
+  50% { border-color: var(--blue); box-shadow: 0 0 26px rgba(124, 196, 255, 0.55); }
+}
+
 #prompt {
   position: absolute; left: 0; right: 0; margin-inline: auto; top: 62%; width: fit-content;
   padding: 7px 16px; border: 1px solid var(--amber); color: var(--amber);

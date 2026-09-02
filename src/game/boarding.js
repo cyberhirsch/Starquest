@@ -85,7 +85,10 @@ export class Boarding {
     } else {
       this.fails++;
       this.say(this.fails >= this.maxFails ? 'CHARGE MISFIRED — COLLAR BLOWN' : 'MISFIRE — RESETTING CHARGE');
-      damageShip(this.player.ship, 14 + this.rig * 4, this.world, { point: this.player.ship.pos });
+      // Tag the cause, or a botched breach reads as a generic 'TAKING DAMAGE'
+      // and the death screen cannot tell you that you cut your own hull open.
+      damageShip(this.player.ship, 14 + this.rig * 4, this.world,
+        { point: this.player.ship.pos, cause: 'breach' });
       if (this.fails >= this.maxFails) {
         this.stage = 'done';
         this.result = { ok: false, msg: 'BOARDING REPELLED' };

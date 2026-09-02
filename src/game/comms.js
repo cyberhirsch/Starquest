@@ -164,6 +164,8 @@ export function choose(player, world, target, id) {
       target.angryAt = null;
       target.target = null;
       target.paidOff = world.time;
+      target.truceHits = 0;
+      target.truceHitAt = world.time;
       if (target.ai) { target.ai.state = 'flee'; target.ai.t = 0; }
       world.log(`PAID OFF ${target.name} — ${cr(cost)} CR`, 'warn');
       return say('SENSIBLE. WE WERE NEVER HERE.', true);
@@ -173,6 +175,8 @@ export function choose(player, world, target, id) {
         target.angryAt = null;
         target.target = null;
         target.paidOff = world.time;     // a bluff that lands buys the same truce
+        target.truceHits = 0;
+        target.truceHitAt = world.time;
         if (target.ai) { target.ai.state = 'flee'; target.ai.t = 0; }
         return say('...NOT TODAY, THEN. WE ARE LEAVING.', true);
       }
@@ -331,14 +335,26 @@ export function updateDistress(world, player) {
     player.distress = null;
     return;
   }
-  const gone = d.attacker.dead || d.attacker.disabled
+  // The attacker can also be reaped out of the world entirely (it ran past the
+  // buoys), which reads as gone for our purposes.
+  const away = !world.ships.includes(d.attacker)
     || vdist(d.attacker.pos, d.ship.pos) > 2600;
-  if (gone) {
+  const gone = d.attacker.dead || d.attacker.disabled || away;
+  if (!gone) return;
+
+  // Only pay for a rescue you actually performed. The attacker breaking off
+  // because a patrol arrived, or because it simply wandered away, used to pay
+  // you the full reward for flying in a straight line somewhere else.
+  const yours = d.attacker.lastHitBy === player.ship || d.attacker.lastHitBy?.wing
+    || vdist(player.ship.pos, d.ship.pos) < 1400;
+  if (yours) {
     player.credits += d.reward;
     player.stats.earned += d.reward;
     player.stats.rescued = (player.stats.rescued || 0) + 1;
     world.log(`${d.ship.name}: THEY ARE RUNNING. ${cr(d.reward)} CR SENT, WITH THANKS.`, 'good');
     chatter(world, d.ship, 'saved', true);
-    player.distress = null;
+  } else {
+    world.log(`${d.ship.name} IS CLEAR — SOMEONE ELSE GOT THERE FIRST`, 'warn');
   }
+  player.distress = null;
 }

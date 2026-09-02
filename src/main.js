@@ -22,7 +22,7 @@ import {
   v3, m4, m4perspective, m4view, m4mul, qid, qaxis, qmul, qnorm, qcopy, qforward, qright, qup,
   qrot, vcopy, vset, vadd, vsub, vscale, vaddScaled, vcross, vlen, vdist, vnorm, clamp, lerp, rand,
 } from './core/math.js';
-import { flyShip, fireMount, mountWorldPos, recalc, cargoUsed, addCargo } from './game/ship.js';
+import { flyShip, fireMount, mountWorldPos, recalc, cargoUsed, addCargo, damageShip } from './game/ship.js';
 
 const canvas = document.getElementById('gl');
 const boot = document.getElementById('boot');
@@ -110,6 +110,7 @@ async function start() {
     ui.flashDamage(0.2 + frac * 2.4);
     mobile.buzz(Math.min(70, 15 + hit.amount));
   };
+  world.onShieldsDown = () => { ui.shieldsDown(); mobile.buzz([40, 60, 40]); };
 
   function fresh() {
     world.ships.length = 0;
@@ -170,6 +171,7 @@ async function start() {
     // The victim and their attacker were left behind in the old sector, so the
     // call could never resolve and blocked the next one for its full 180 s.
     player.distress = null;
+    world.clearDamageLog();
     player.sector = gate.to;
     Crew.syncCrew(player, world);
     player.target = null;
@@ -249,6 +251,7 @@ async function start() {
     player.ship.disabled = false;
     player.target = null;
     player.distress = null;
+    world.clearDamageLog();
     if (!world.ships.includes(player.ship)) world.ships.push(player.ship);
     ui.close();
     ui.log('NEW HULL ISSUED — INSURANCE TOOK ITS CUT', 'warn');
@@ -582,6 +585,7 @@ async function start() {
   game.Contracts = Contracts;
   game.Crew = Crew;
   game.Comms = Comms;
+  game.damageShip = damageShip;         // handy from the console, and from tests
   game.classes = { Boarding };          // handy from the console
   game.batch = batch;
   window.STARQUEST = game;

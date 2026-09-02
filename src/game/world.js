@@ -17,6 +17,9 @@ import { runAI, inTruce } from './ai.js';
 
 export const SECTOR_R = 5200;
 
+/** How far back the death screen looks when working out what killed you. */
+const DAMAGE_WINDOW = 25;
+
 class Grid {
   constructor(cell) { this.cell = cell; this.map = new Map(); }
   key(x, y, z) {
@@ -88,6 +91,56 @@ export class World {
   }
 
   /** Tell the player what just hit them, and from where. */
+  /** Damage taken in the last DAMAGE_WINDOW seconds, grouped by what caused it. */
+  noteDamageSource(src, cause, amount) {
+    const label = cause === 'collision' ? 'COLLISION'
+      : cause === 'breach' ? 'A BREACHING CHARGE'
+        : src ? src.name : 'SOMETHING YOU NEVER SAW';
+    const list = this.damageLog = this.damageLog || [];
+    const row = list.find((r) => r.label === label);
+    if (row) { row.amount += amount; row.t = this.time; row.ship = src || row.ship; }
+    else list.push({ label, amount, t: this.time, ship: src || null, faction: src?.faction || null });
+    // keep it short; anything older than the window is not what killed you
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (this.time - list[i].t > DAMAGE_WINDOW) list.splice(i, 1);
+    }
+  }
+
+  /**
+   * What just happened, for the death screen. Built from state already in
+   * memory — no extra bookkeeping in the frame loop.
+   */
+  deathReport() {
+    const rows = [...(this.damageLog || [])].sort((a, b) => b.amount - a.amount);
+    const total = rows.reduce((n, r) => n + r.amount, 0);
+    const top = rows[0] || null;
+    // Whoever did the most damage, not whoever landed the last hit — clipping a
+    // rock on the way down should not get the credit for the kill.
+    const killer = rows.find((r) => r.ship)?.ship || this.lastHit?.from || null;
+    let tip = 'Keep the throttle open and the rocks between you and them.';
+    if (top && top.label === 'COLLISION') {
+      tip = 'Rocks hit as hard as guns at speed. Ease off before you thread the belt.';
+    } else if (killer && killer.faction === 'pirate') {
+      tip = 'HAIL a pirate before the shooting starts — most of them will take a tribute and leave you alone.';
+    } else if (killer && killer.faction === 'security') {
+      tip = 'The Authority came for the price on your head. Settle it at the depot, or in the field over the radio.';
+    } else if (top && top.faction === null) {
+      tip = 'Whatever it was, it was in front of you. Watch the wedge on the reticle.';
+    }
+    return {
+      killer: killer ? killer.name : null,
+      killerClass: killer ? `${killer.cls.name} · ${killer.faction.toUpperCase()}` : null,
+      // Shares, not raw damage: what a player wants from this screen is "most of
+      // it came from the Kestrel", and a share reads the same on any hull.
+      sources: rows.slice(0, 4).map((r) => ({
+        label: r.label,
+        amount: Math.round(r.amount),
+        share: total > 0 ? Math.round((r.amount / total) * 100) : 0,
+      })),
+      tip,
+    };
+  }
+
   notePlayerDamage(amount, shieldBefore, opts = {}) {
     const ship = this.player.ship;
     const src = opts.from && opts.from !== ship ? opts.from : null;
@@ -100,15 +153,23 @@ export class World {
     };
     this.onPlayerDamage?.(this.lastHit);
 
+    // A running tally of who has been hurting you lately, so the death screen
+    // can name the thing that actually killed you rather than the last pinprick.
+    this.noteDamageSource(src, opts.cause, amount);
+
     const key = opts.cause === 'collision' ? 'collision' : src ? `s${src.id}` : 'unknown';
     this._hitLog = this._hitLog || new Map();
     if (this.time - (this._hitLog.get(key) ?? -99) > 3.5) {
       this._hitLog.set(key, this.time);
       if (opts.cause === 'collision') this.log('HULL IMPACT — WATCH THE ROCKS', 'warn');
+      else if (opts.cause === 'breach') this.log('CHARGE MISFIRED — YOUR OWN HULL', 'warn');
       else if (src) this.log(`UNDER FIRE FROM ${src.name}`, 'danger');
       else this.log('TAKING DAMAGE', 'danger');
     }
-    if (shieldBefore > 0 && ship.shield <= 0) this.log('SHIELDS DOWN', 'danger');
+    if (shieldBefore > 0 && ship.shield <= 0) {
+      this.log('SHIELDS DOWN — HULL IS TAKING IT NOW', 'danger');
+      this.onShieldsDown?.();
+    }
     const frac = ship.hull / ship.stats.hullMax;
     if (frac < 0.35 && this.time - (this._hullWarn ?? -99) > 6) {
       this._hullWarn = this.time;
@@ -150,6 +211,9 @@ export class World {
     for (let i = 0; i < def.miners; i++) this.spawnMiner();
     for (let i = 0; i < def.derelicts; i++) this.spawnDerelict();
   }
+
+  /** Forget what has been hurting you — a new hull, or a new sector. */
+  clearDamageLog() { this.damageLog = []; this.lastHit = null; }
 
   /** Clear the sector out, keeping the player's ship and anything flying with it. */
   clear() {
@@ -332,7 +396,13 @@ export class World {
       dmg: module.dmg,
       ion: module.ion || 0,
       oreMul: module.oreMul || 0.15,
-      owner, faction: owner.faction, color: module.color,
+      owner, faction: owner.faction,
+      manual: module.mount !== 'auto',   // a turret's round is not your decision
+      // A pirate's pulse round used to be pixel-identical to yours, so in a
+      // crowded fight nothing on screen said which streaks could hurt you.
+      // Anything that can is red; neutral traffic is dim; yours keeps its colour.
+      color: this.isHostile(this.player.ship, owner) ? 'enemyLaser'
+        : owner.faction === 'player' ? module.color : 'hudDim',
       len: clamp(speed * 0.018, 4, 26),
       target,
     };
@@ -355,7 +425,10 @@ export class World {
       if (t >= 0 && t < bestT) { bestT = t; best = s; bestKind = 'ship'; }
     }
     const end = vaddScaled(v3(), origin, dir, bestT);
-    this.beams.push({ a: vcopy(v3(), origin), b: end, color: module.color, hit: !!best });
+    this.beams.push({
+      a: vcopy(v3(), origin), b: end, hit: !!best,
+      color: this.isHostile(this.player.ship, ship) ? 'enemyLaser' : module.color,
+    });
     if (!best) return;
 
     if (bestKind === 'asteroid') {
@@ -363,7 +436,8 @@ export class World {
     } else if (module.cut) {
       this.stripHulk(best, module, ship, dt, end);
     } else {
-      damageShip(best, module.dmg * dt * 2.2, this, { from: ship, point: end, ion: (module.ion || 0) * dt });
+      damageShip(best, module.dmg * dt * 2.2, this,
+        { from: ship, point: end, ion: (module.ion || 0) * dt, manual: module.mount !== 'auto' });
       if (Math.random() < 0.4) this.sparks(end, 1, 2);
     }
   }
@@ -677,15 +751,27 @@ export class World {
 
   confine(s, dt) {
     const d2 = vlen2(s.pos);
-    if (d2 > SECTOR_R * SECTOR_R) {
-      const d = Math.sqrt(d2);
-      vnorm(_a, s.pos);
-      const pull = (d - SECTOR_R) * 0.6;
-      vaddScaled(s.vel, s.vel, _a, -pull * dt);
-      if (s === this.player.ship && this.time - (this._edgeWarn || -99) > 6) {
-        this._edgeWarn = this.time;
-        this.log('NAV BUOY LIMIT — TURN BACK', 'warn');
+    if (d2 <= SECTOR_R * SECTOR_R) return;
+    // A fighter running for its life and already past the buoys is gone — it
+    // made it. Bouncing it off an invisible wall left beaten pirates circling
+    // the edge forever, so a fight you had won never actually ended.
+    if (s !== this.player.ship && !s.wing && s.ai?.state === 'flee'
+      && d2 > SECTOR_R * SECTOR_R * 1.06) {
+      s.dead = true;
+      s.escaped = true;
+      s.deadAt = this.time;         // reaped by the sweep below, with no explosion
+      if (s.target === this.player.ship || s.angryAt === this.player.ship) {
+        this.log(`${s.name} MADE IT OUT`, 'warn');
       }
+      return;
+    }
+    const d = Math.sqrt(d2);
+    vnorm(_a, s.pos);
+    const pull = (d - SECTOR_R) * 0.6;
+    vaddScaled(s.vel, s.vel, _a, -pull * dt);
+    if (s === this.player.ship && this.time - (this._edgeWarn || -99) > 6) {
+      this._edgeWarn = this.time;
+      this.log('NAV BUOY LIMIT — TURN BACK', 'warn');
     }
   }
 
@@ -716,7 +802,8 @@ export class World {
 
       if (hit) {
         if (hit.kind === 'ship') {
-          damageShip(hit, p.dmg, this, { from: p.owner, point: hitPoint, ion: p.ion });
+          damageShip(hit, p.dmg, this, {
+            from: p.owner, point: hitPoint, ion: p.ion, manual: p.manual });
           if (hit.faction !== 'pirate' && p.owner === this.player.ship) this.provoke(hit);
         } else {
           hit.hp -= p.dmg * (p.oreMul > 1 ? p.oreMul * 0.4 : 1);

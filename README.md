@@ -118,9 +118,11 @@ fights you would rather not have, and a way to start ones that pay.
   often beats what boarding would have got you.
 - **Get scanned.** Hail an Authority patrol and submit to a scan: contraband is
   seized and fined, a clean hold costs nothing but the time. They only look once.
-- **Maydays.** A trader under attack broadcasts for help and names a reward — drive
-  the attacker off and it is paid. Rob someone yourself and they will not be calling
-  you.
+- **Maydays.** Traders run from whoever shoots them, whether that is you or a
+  pirate two kilometres away, and a trader under attack broadcasts for help
+  naming a reward. Drive the attacker off yourself and it is paid; arrive after
+  someone else has, and you get the thanks and nothing else. Rob someone and they
+  will not be calling you.
 - **Wing orders.** Hail your own hires to send them at your target, form back up, or
   hold position.
 
@@ -134,12 +136,18 @@ activity, and the belt chatters over the open channel while you fly.
   type is visible in the colour of the wireframe.
 - **Fight.** Pirates hunt the belt. Computer-flown hulls are capped at 150 m/s
   whatever they have fitted, so a runner can always be run down — your own ships
-  keep their full rating, which is part of what you are buying when you upgrade. Shoot a licensed hull and the Authority prices
-  your head; kill a pirate and you are paid a bounty. The HUD names whoever is
-  shooting you and marks their bearing on a ring around the reticle, and hull and
-  shield are always on screen as numbers — nothing kills you silently. New pilots
-  take reduced damage until they have some standing, and the belt stays quiet for
-  the first minute.
+  keep their full rating, which is part of what you are buying when you upgrade.
+  A hull shot below a third loses drive power with it, so a fight you are winning
+  ends in a catch instead of a stern chase; one that reaches the buoys still
+  running is gone for good. Shoot a licensed hull and the Authority prices your
+  head; kill a pirate and you are paid a bounty.
+- **Read the fight.** Anything that can hurt you is drawn red — your own fire
+  keeps its colour and neutral traffic is dim. The name of whoever is shooting
+  you sits under the topbar, their bearing on a ring around the reticle, and hull
+  and shield are on screen as numbers. Shields giving out strobes the panel. When
+  you do die, the screen names the ship that killed you and shows what share of
+  the damage came from where. New pilots take reduced damage until they have some
+  standing, and the belt stays quiet for the first minute.
 - **Board.** Ion weapons and heavy damage leave hulls adrift instead of scattering
   them. Carry a breaching rig, match velocity, and cut your way in — three clean
   charges strips the hold and files a claim on the hull worth half price at the yard.

@@ -146,6 +146,33 @@ await page.screenshot({ path: 'docs/shot-comms.png' });
 await page.locator('#commsOpts [data-do-comms="close"]').click();
 check('the channel closes', await until(() => document.getElementById('comms').classList.contains('hidden')));
 
+// --- combat legibility -------------------------------------------------------
+await read(() => {
+  const g = window.STARQUEST;
+  const foe = g.world.ships.find((s) => s.name === 'BLACK KESTREL');
+  g.damageShip(g.player.ship, 60, g.world, { from: foe, manual: true });
+});
+check('the threat tag names who is shooting you',
+  await until(() => !document.getElementById('threat').classList.contains('hidden')),
+  await page.locator('#threatName').textContent());
+await page.screenshot({ path: 'docs/shot-threat.png' });
+
+await read(() => {
+  const g = window.STARQUEST;
+  const foe = g.world.ships.find((s) => s.name === 'BLACK KESTREL');
+  g.player.ship.shield = 0;
+  g.damageShip(g.player.ship, 99999, g.world, { from: foe, manual: true });
+});
+check('dying opens the post-mortem',
+  await until(() => /HULL LOST/.test(document.getElementById('overlay').textContent), 30));
+const dead = await page.locator('#overlay').textContent();
+check('which names the ship that killed you', /BLACK KESTREL KILLED YOU/.test(dead));
+check('and itemises the damage by share', /WHAT TOOK YOU APART/.test(dead) && /\d+%/.test(dead));
+await page.screenshot({ path: 'docs/shot-death.png' });
+await page.locator('[data-do="respawn"]').click();
+check('respawn puts you back at the depot',
+  await until(() => !window.STARQUEST.player.ship.dead));
+
 // --- GPU context loss, which Android does on every backgrounding -----------
 if (backend === 'webgl2') {
   await read(() => {
