@@ -99,8 +99,11 @@ check('hull readout shows real numbers',
   await page.locator('#hullVal').textContent());
 check('starter ship carries a cannon and a cutter',
   (await page.locator('#weapons').textContent()).includes('MINING LASER'));
-// earlier checks left the throttle in reverse, so open it up again and let the
-// first objective ("build speed") actually complete
+// earlier checks left the pilot in the gunner seat (where the autopilot owns
+// the throttle) and the bar in reverse — take the stick back, then open it up
+// so the first objective ("build speed") can actually complete
+await page.locator('[data-action="mode"]').click();
+await until(() => window.STARQUEST.player.mode === 'pilot');
 await dragBar(0.05);
 check('tutorial advanced past the throttle step',
   await until(() => window.STARQUEST.player.tutorial.step >= 1, 40),
@@ -121,6 +124,27 @@ check('progress survives a reload',
 
 await page.locator('[data-action="skiptut"]').click();
 check('SKIP TUTORIAL dismisses it', await until(() => window.STARQUEST.player.tutorial.done));
+
+// --- comms ------------------------------------------------------------------
+// Park a pirate right off the bow so the channel is definitely in range.
+await read(() => {
+  const g = window.STARQUEST;
+  const p = g.player.ship;
+  const foe = g.world.spawnPirate();
+  foe.name = 'BLACK KESTREL';
+  foe.pos[0] = p.pos[0] + 400; foe.pos[1] = p.pos[1]; foe.pos[2] = p.pos[2] + 400;
+  g.player.target = foe;
+});
+await page.locator('[data-action="hail"]').click();
+check('HAIL opens a channel', await until(() => !document.getElementById('comms').classList.contains('hidden')));
+check('the other ship says something',
+  (await page.locator('#commsLine').textContent()).trim().length > 0,
+  (await page.locator('#commsLine').textContent()).slice(0, 44));
+const opts = await page.locator('#commsOpts .hbtn').allTextContents();
+check('the channel offers a way out', opts.length >= 3, opts.map((o) => o.split('\n')[0]).join(', '));
+await page.screenshot({ path: 'docs/shot-comms.png' });
+await page.locator('#commsOpts [data-do-comms="close"]').click();
+check('the channel closes', await until(() => document.getElementById('comms').classList.contains('hidden')));
 
 // --- GPU context loss, which Android does on every backgrounding -----------
 if (backend === 'webgl2') {

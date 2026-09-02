@@ -62,6 +62,7 @@ export class Player {
     this.sector = 'halcyon';
     this.contracts = [];
     this.crew = [];
+    this.distress = null;
     this.lastSaved = 0;
     this.stats = { kills: 0, mined: 0, rocks: 0, boarded: 0, earned: 0, docked: 0 };
     this.vouchers = {};                             // classId -> discount claims from boarding

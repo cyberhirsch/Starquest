@@ -9,6 +9,7 @@ import {
 import { vdist, vlen, clamp } from '../core/math.js';
 import * as Contracts from '../game/contracts.js';
 import * as Crew from '../game/crew.js';
+import * as Comms from '../game/comms.js';
 import { boardBlocker, BOARD_RANGE } from '../game/boarding.js';
 
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -47,7 +48,15 @@ export class UI {
       objTitle: document.getElementById('objTitle'),
       objBody: document.getElementById('objBody'),
       objStep: document.getElementById('objStep'),
+      comms: document.getElementById('comms'),
+      commsWho: document.getElementById('commsWho'),
+      commsLine: document.getElementById('commsLine'),
+      commsOpts: document.getElementById('commsOpts'),
     };
+    this.el.comms.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-do-comms]');
+      if (b) this.comms(b.dataset.doComms);
+    });
     this.screen = null;
     this.tab = 'loadout';
     this.selSlot = null;
@@ -144,10 +153,56 @@ export class UI {
       }
     } else this.el.target.classList.add('hidden');
 
+    this.tickComms();
+
     // contextual prompt
     const p = g.promptText;
     if (p) { this.el.prompt.textContent = p; this.el.prompt.classList.remove('hidden'); }
     else this.el.prompt.classList.add('hidden');
+  }
+
+  /* ------------------------------------------------------------ comms -- */
+
+  openComms(target) {
+    const g = this.game;
+    const state = Comms.open(g.player, g.world, target);
+    if (state.error) { this.log(state.error, 'warn'); return; }
+    this.commsTarget = target;
+    this.el.comms.classList.remove('hidden');
+    this.drawComms(state);
+  }
+
+  closeComms() {
+    this.commsTarget = null;
+    this.el.comms.classList.add('hidden');
+  }
+
+  /** A pick from the channel, or the close button. */
+  comms(id) {
+    const g = this.game;
+    const t = this.commsTarget;
+    if (!t || id === 'close') { this.closeComms(); return; }
+    const state = Comms.choose(g.player, g.world, t, id);
+    if (state.close && !state.line) { this.closeComms(); return; }
+    this.drawComms({ ...state, target: t });
+    if (state.close) setTimeout(() => this.closeComms(), 2600);
+  }
+
+  drawComms(state) {
+    const t = state.target || this.commsTarget;
+    this.el.commsWho.textContent =
+      `${t.name} · ${t.disabled ? 'ADRIFT' : t.wing ? 'YOUR WING' : t.faction.toUpperCase()}`;
+    this.el.commsLine.textContent = state.line || '';
+    this.el.commsOpts.innerHTML = (state.options || [])
+      .map((o) => `<button class="hbtn" data-do-comms="${o.id}">${esc(o.label)}${
+        o.hint ? `<i>${esc(o.hint)}</i>` : ''}</button>`).join('');
+  }
+
+  /** Drop the channel when the other ship stops being reachable. */
+  tickComms() {
+    const t = this.commsTarget;
+    if (!t) return;
+    if (Comms.canHail(this.game.player, this.game.world, t)) this.closeComms();
   }
 
   /** Show the current tutorial objective, or clear it when there is none. */

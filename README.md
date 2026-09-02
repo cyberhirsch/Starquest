@@ -45,13 +45,14 @@ you on a blank canvas.
 **Touch** — the left bar is the throttle: above centre is forward, below is reverse,
 double-tap to cut to zero. **FIRE** sits under it. Touch anywhere on the right half to
 place the steering stick. `MODE` swaps between the pilot and gunner seats, `TGT`
-cycles contacts, `ACT` docks or boards, `INV` opens the loadout.
+cycles contacts, `HAIL` opens a channel to your target, `ACT` docks or boards,
+`INV` opens the loadout.
 
 **Keyboard / mouse** — `W`/`S` throttle (`X` to zero, wheel trims) · mouse steers
 (click to capture the pointer; `A`/`D` and the arrows also work) · `Q`/`E` roll ·
 `Space` or click to fire · `R` pilot/gunner · `T` target · `F` dock or board ·
-`Tab` inventory · `1`–`6` pick which mount you are manning · `G` flight assist ·
-`M` manual.
+`H` hail · `Tab` inventory · `1`–`6` pick which mount you are manning ·
+`G` flight assist · `M` manual.
 
 ## Getting started
 
@@ -96,6 +97,30 @@ what a Corsair costs, if you live through it.
 Hire a pilot at either station and they fly their own hull on your wing, break to
 engage what threatens you, and follow you through jumps. Two on the books at most, and
 no insurance if they are shot down.
+
+## Talking
+
+Lock a contact inside 2.6 km and `HAIL` opens a channel — the radio is a way through
+fights you would rather not have, and a way to start ones that pay.
+
+- **Buy your way out.** A pirate closing on you will usually take a tribute. The price
+  scales with what you are worth to them; pay it and they break off. Threatening them
+  works only if you are visibly the bigger ship.
+- **Take without shooting.** Hail a weaker trader and demand their cargo — they read
+  the odds and jettison pods rather than die. It is piracy, it is logged, and the
+  Authority prices your head accordingly.
+- **Mercy pays.** A hull you left adrift will buy its crew's lives, and the ransom
+  often beats what boarding would have got you.
+- **Get scanned.** Authority patrols hail *you*. Contraband in the hold is seized and
+  fined; a clean hold costs you nothing but the time.
+- **Maydays.** A trader under attack broadcasts for help and names a reward — drive
+  the attacker off and it is paid. Rob someone yourself and they will not be calling
+  you.
+- **Wing orders.** Hail your own hires to send them at your target, form back up, or
+  hold position.
+
+Stations and pilots also gossip: hails pick up rumours about prices and pirate
+activity, and the belt chatters over the open channel while you fly.
 
 ## The belt
 
@@ -150,6 +175,8 @@ src/
     sectors.js        sector and station definitions
     contracts.js      the station boards and what settles them
     crew.js           hired wingmen
+    comms.js          hails, tribute, ransom, scans, maydays, wing orders
+    tutorial.js       the first-flight objectives
   ui/
     screens.js        DOM overlays        hud.js    vector HUD, radar, reticles
     input.js          keyboard/mouse/touch      mobile.js  PWA, wake lock, scaling
@@ -157,6 +184,7 @@ src/
 tools/                icon and service-worker generators
 test/integration.mjs  headless play-through of every system
 test/render.mjs       draws real frames, fails on non-finite geometry
+test/browser.mjs      optional Playwright pass over the real touch controls
 ```
 
 ## How the vector look works

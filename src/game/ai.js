@@ -6,6 +6,7 @@ import {
 } from '../core/math.js';
 import { MODULES } from './data.js';
 import { fireMount, mountWorldPos, cargoFree } from './ship.js';
+import { chatter } from './comms.js';
 
 const _dir = v3(), _loc = v3(), _lead = v3(), _tmp = v3(), _mz = v3(), _q = [0, 0, 0, 1];
 
@@ -101,9 +102,13 @@ function combat(ship, world, dt, control, fleeAt) {
 
   const hullFrac = ship.hull / ship.stats.hullMax;
   if (hullFrac < fleeAt && ai.state !== 'flee') { ai.state = 'flee'; ai.t = 0; }
+  if (ship.faction === 'pirate' && t === world.player.ship && ai.state !== 'flee') {
+    chatter(world, ship, 'pirateEngage');
+  }
   const dist = vdist(ship.pos, t.pos);
 
   if (ai.state === 'flee') {
+    chatter(world, ship, ship.faction === 'pirate' ? 'pirateFlee' : 'traderFlee');
     vsub(_dir, ship.pos, t.pos);
     vnorm(_dir, _dir);
     steer(ship, _dir, control, 1.6);
@@ -136,6 +141,17 @@ function wing(ship, world, dt, control) {
   const lead = world.player.ship;
   if (!lead || lead.dead) { control.throttle = 0; return; }
 
+  // a standing order from the channel overrides their own judgement
+  if (ai.order === 'hold') {
+    control.throttle = Math.abs(vlen(ship.vel)) > 12 ? -0.4 : 0;
+    return;
+  }
+  if (ai.order === 'engage' && ai.orderTarget && !ai.orderTarget.dead) {
+    ship.target = ai.orderTarget;
+    combat(ship, world, dt, control, 0.05);
+    return;
+  }
+
   if (!ship.target || ship.target.dead || ship.target.disabled || ai.t > 3) {
     ai.t = 0;
     ship.target = findPrey(ship, world);
@@ -165,6 +181,7 @@ function trader(ship, world, dt, control) {
   if (ship.angryAt && !ship.angryAt.dead) {
     const d = vdist(ship.pos, ship.angryAt.pos);
     if (d < 2200) {
+      chatter(world, ship, 'traderFlee');
       vsub(_dir, ship.pos, ship.angryAt.pos);
       vnorm(_dir, _dir);
       steer(ship, _dir, control, 1.5);

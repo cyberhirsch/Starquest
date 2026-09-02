@@ -13,6 +13,7 @@ import { Player } from './game/player.js';
 import { Tutorial } from './game/tutorial.js';
 import * as Contracts from './game/contracts.js';
 import * as Crew from './game/crew.js';
+import * as Comms from './game/comms.js';
 import { steer, steerTo } from './game/ai.js';
 
 import { Boarding, boardBlocker, BOARD_RANGE, BOARD_SPEED } from './game/boarding.js';
@@ -275,6 +276,13 @@ async function start() {
           player.save();
           ui.log('TUTORIAL SKIPPED — SEE THE MANUAL ANY TIME', 'info');
           break;
+        case 'hail': {
+          const t = player.target;
+          const blocked = Comms.canHail(player, world, t);
+          if (blocked) ui.log(blocked, 'warn');
+          else { ui.openComms(t); audio.beep(true); }
+          break;
+        }
         case 'inventory': ui.open('inventory'); break;
         case 'map': ui.open('menu'); break;
         case 'mode': toggleMode(); break;
@@ -475,6 +483,9 @@ async function start() {
     ui.setObjective(card);
     if (card?.complete) setTimeout(() => ui.setObjective(null), 6000);
 
+    Comms.checkDistress(world, player, dt);
+    Comms.updateDistress(world, player);
+
     autosave(dt);
     ui.update(game);
   }
@@ -562,6 +573,7 @@ async function start() {
 
   game.Contracts = Contracts;
   game.Crew = Crew;
+  game.Comms = Comms;
   game.classes = { Boarding };          // handy from the console
   game.batch = batch;
   window.STARQUEST = game;

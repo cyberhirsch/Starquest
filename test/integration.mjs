@@ -9,6 +9,7 @@ import { createShip, flyShip, fireMount, updateTurrets, damageShip, cargoUsed, a
 import { MODULES } from '../src/game/data.js';
 import * as Contracts from '../src/game/contracts.js';
 import * as Crew from '../src/game/crew.js';
+import * as Comms from '../src/game/comms.js';
 import { v3, vsub, vnorm, vdist, qlook } from '../src/core/math.js';
 
 let pass = 0, fail = 0;
@@ -320,6 +321,97 @@ section('SALVAGE');
   ok('the yard pays a premium for scrap',
     world.station.market.sellPrice('scrap') > 34,
     `${world.station.market.sellPrice('scrap')} cr vs 34 base`);
+}
+
+/* ----------------------------------------------------------------- comms */
+section('COMMS');
+{
+  world.jumpTo('halcyon');
+  player.wanted = 0;
+  const me = player.ship;
+  me.pos = v3(0, 0, 0);
+
+  const far = createShip('corsair', 'pirate', { pos: v3(9000, 0, 0), name: 'TOO FAR' });
+  world.ships.push(far);
+  ok('range is enforced', Comms.canHail(player, world, far) === 'OUT OF COMMS RANGE');
+
+  // paying off a pirate
+  const pirate = createShip('corsair', 'pirate', { pos: v3(0, 0, -400), name: 'RED VESPER' });
+  pirate.ai = { role: 'pirate', state: 'hunt', t: 0 };
+  pirate.angryAt = me;
+  world.ships.push(pirate);
+  const panel = Comms.open(player, world, pirate);
+  ok('a pirate offers a way out', panel.options.some((o) => o.id === 'tribute'),
+    panel.options.map((o) => o.id).join(','));
+  player.credits = 20000;
+  const cost = Comms.tributeCost(player);
+  Comms.choose(player, world, pirate, 'tribute');
+  ok('tribute costs credits', player.credits === 20000 - cost, `${cost} cr`);
+  ok('and they break off', pirate.angryAt === null && pirate.ai.state === 'flee');
+
+  // robbing a trader you outgun
+  player.active = player.hangar.findIndex((h) => h.classId === 'bastion');
+  if (player.active < 0) player.active = 0;
+  player.buildShip(world);
+  const victim = createShip('shuttle', 'trader', { pos: v3(0, 0, -300), name: 'FAT MARGIN' });
+  addCargo(victim, 'luxuries', 20);
+  victim.ai = { role: 'trader', state: 'travel', t: 0 };
+  world.ships.push(victim);
+  const pods = world.pods.length;
+  const wanted = player.wanted;
+  const r = Comms.choose(player, world, victim, 'demand');
+  ok('a weaker trader gives up the cargo', world.pods.length > pods,
+    `${world.pods.length - pods} pods jettisoned`);
+  ok('and it is logged as piracy', player.wanted > wanted, `bounty +${player.wanted - wanted}`);
+
+  // a scan with contraband aboard
+  const sec = createShip('sentinel', 'security', { pos: v3(0, 0, -250), name: 'HALCYON PATROL' });
+  world.ships.push(sec);
+  player.ship.cargo = {};
+  addCargo(player.ship, 'contraband', 6);
+  player.credits = 30000;
+  Comms.choose(player, world, sec, 'scan');
+  ok('a scan finds contraband', !player.ship.cargo.contraband, 'seized');
+  ok('and fines you', player.credits < 30000);
+
+  // an adrift hull
+  const hulk = createShip('hauler', 'trader', { pos: v3(0, 0, -200), name: 'COLD COMFORT', credits: 8000 });
+  hulk.disabled = true;
+  world.ships.push(hulk);
+  const before = player.credits;
+  Comms.choose(player, world, hulk, 'ransom');
+  ok('an adrift crew will buy you off', player.credits > before, `+${player.credits - before} cr`);
+
+  // orders to the wing
+  Crew.hire(player, 'wingShuttle', world);
+  const wing = world.ships.find((s) => s.wing && !s.dead);
+  player.target = pirate;
+  Comms.choose(player, world, wing, 'wingEngage');
+  ok('the wing takes an order', wing.ai.order === 'engage' && wing.ai.orderTarget === pirate);
+  Comms.choose(player, world, wing, 'wingHold');
+  ok('and can be told to sit still', wing.ai.order === 'hold');
+}
+
+/* -------------------------------------------------------------- distress */
+section('DISTRESS');
+{
+  player.distress = null;
+  const raider = createShip('marauder', 'pirate', { pos: v3(400, 0, 0), name: 'NINE TEETH' });
+  const prey = createShip('hauler', 'trader', { pos: v3(300, 0, 0), name: 'LONG PATIENCE' });
+  prey.ai = { role: 'trader', state: 'travel', t: 0 };
+  prey.angryAt = raider;
+  world.ships.push(raider, prey);
+  player.ship.pos = v3(0, 0, 0);
+
+  world._distressTimer = 0;
+  const call = Comms.checkDistress(world, player, 1 / 60);
+  ok('a mayday goes out', !!call, call ? `${call.reward} cr offered` : 'none');
+
+  const purse = player.credits;
+  raider.dead = true;                        // you saw them off
+  Comms.updateDistress(world, player);
+  ok('driving them off pays', player.credits > purse, `+${player.credits - purse} cr`);
+  ok('and the call clears', player.distress === null);
 }
 
 /* ------------------------------------------------------------ simulation */

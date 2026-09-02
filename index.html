@@ -45,6 +45,12 @@
     <div class="row small"><span id="tgtInfo"></span></div>
   </div>
 
+  <div id="comms" class="panel hidden">
+    <div class="commshead"><b id="commsWho">—</b><button class="hbtn" data-do-comms="close">✕</button></div>
+    <p id="commsLine"></p>
+    <div id="commsOpts"></div>
+  </div>
+
   <div id="vitals" class="panel">
     <div class="vrow"><i>HULL</i><u><s id="hullBar"></s></u><b id="hullVal">0</b></div>
     <div class="vrow"><i>SHLD</i><u><s id="shieldBar"></s></u><b id="shieldVal">0</b></div>
@@ -58,6 +64,7 @@
   <div id="btnRow">
     <button class="hbtn" data-action="mode" title="Pilot / gunner (R)">MODE</button>
     <button class="hbtn" data-action="target" title="Cycle target (T)">TGT</button>
+    <button class="hbtn" data-action="hail" title="Hail your target (H)">HAIL</button>
     <button class="hbtn" data-action="action" title="Dock / board (F)">ACT</button>
     <button class="hbtn" data-action="inventory" title="Inventory &amp; loadout (Tab)">INV</button>
     <button class="hbtn hidden" id="installBtn" title="Install to your home screen">INSTALL</button>
