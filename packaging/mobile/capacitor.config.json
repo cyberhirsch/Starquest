@@ -1,0 +1,19 @@
+{
+  "appId": "dev.cyberhirsch.starquest",
+  "appName": "STARQUEST",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#000604",
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "backgroundColor": "#000604",
+    "contentInset": "never",
+    "scrollEnabled": false
+  },
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https"
+  }
+}

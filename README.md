@@ -16,6 +16,27 @@ npm start          # serves on http://localhost:8080
 Then open <http://localhost:8080>. No build step, no dependencies — it is ES modules
 and a 34-line static server. Add `?gfx=webgl` or `?gfx=webgpu` to force a backend.
 
+## Get it
+
+| | |
+|---|---|
+| **Web** | <https://cyberhirsch.github.io/Starquest/> — plays in the browser, installs as a PWA |
+| **Windows** | `.exe` installer from [Releases](../../releases) |
+| **macOS** | `.dmg` from Releases — right-click → Open the first time, it is unsigned |
+| **Linux** | `.AppImage` from Releases |
+| **Android** | `.apk` from Releases, sideloaded — or add the web version to your home screen |
+| **iOS** | Add the web version to your home screen |
+
+Every build is the same game from the same files; the desktop and phone builds are
+shells around the web version rather than ports of it. There is no iOS binary,
+because Apple only allows an app onto a phone once it is signed with a certificate
+from a paid developer account — the PWA is the way in on iOS, and it is a good one:
+fullscreen, offline, its own icon. [docs/PACKAGING.md](docs/PACKAGING.md) covers how
+each build is made and exactly what "unsigned" costs you on each platform.
+
+Saves are per install. The browser, the desktop app and the phone build do not share
+progress.
+
 ## Install on a phone
 
 The repository ships a GitHub Pages workflow (`.github/workflows/pages.yml`) that
@@ -199,10 +220,13 @@ src/
     screens.js        DOM overlays        hud.js    vector HUD, radar, reticles
     input.js          keyboard/mouse/touch      mobile.js  PWA, wake lock, scaling
     audio.js          WebAudio synth (no samples)  style.css
-tools/                icon and service-worker generators
+tools/                icon, service-worker and payload generators
+packaging/desktop/    Electron shell -> Windows installer, macOS dmg, AppImage
+packaging/mobile/     Capacitor shell -> Android APK, iOS project
 test/integration.mjs  headless play-through of every system
 test/render.mjs       draws real frames, fails on non-finite geometry
 test/browser.mjs      optional Playwright pass over the real touch controls
+test/desktop.mjs      optional Electron pass over the app:// shell
 ```
 
 ## How the vector look works
@@ -223,17 +247,28 @@ segments, so they glow identically.
 
 ```
 npm start            # static server
-npm test             # headless: 85 integration assertions + 14 render scenarios
+npm test             # headless: 104 integration assertions + 14 render scenarios
 npm run icons        # regenerate PWA icons from the Corsair mesh
 npm run sw           # regenerate the service worker file list + version
+npm run dist         # assemble the game's runtime files into dist/
 ```
 
-`npm run test:browser` additionally drives the touch controls in a real Chromium —
-it needs Playwright installed and the server already running:
+Two optional suites need something installed. `npm run test:browser` drives the touch
+controls in a real Chromium, with the server already running:
 
 ```
 node server.js &
 PLAYWRIGHT=$(npm root -g)/playwright/index.mjs GFX=webgl npm run test:browser
+```
+
+`npm run test:desktop` checks the Electron shell — that the game is served over a
+secure custom scheme and that its ES modules actually load, both of which fail
+silently rather than crashing if the shell is misconfigured:
+
+```
+cd packaging/desktop && npm install && cd ../..
+npm run dist -- packaging/desktop/app
+xvfb-run -a npm run test:desktop      # drop xvfb-run off Linux
 ```
 
 Run `npm run sw` after changing any source file, or the offline cache will serve a

@@ -1,0 +1,60 @@
+{
+  "name": "starquest-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop shell for STARQUEST — Windows installer and macOS disk image.",
+  "main": "main.js",
+  "author": "cyberhirsch",
+  "license": "MIT",
+  "scripts": {
+    "prestart": "node ../../tools/make-dist.mjs packaging/desktop/app",
+    "start": "electron .",
+    "prebuild": "node ../../tools/make-dist.mjs packaging/desktop/app",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.cyberhirsch.starquest",
+    "productName": "STARQUEST",
+    "copyright": "MIT",
+    "directories": { "output": "out", "buildResources": "build" },
+    "files": ["main.js", "app/**/*"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.png",
+      "artifactName": "STARQUEST-${version}-windows-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "STARQUEST"
+    },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "icon": "build/icon.png",
+      "category": "public.app-category.games",
+      "artifactName": "STARQUEST-${version}-macos.${ext}",
+      "darkModeSupport": true,
+      "identity": null,
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "STARQUEST ${version}",
+      "backgroundColor": "#000604"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "build/icon.png",
+      "category": "Game",
+      "artifactName": "STARQUEST-${version}-linux.${ext}"
+    }
+  }
+}

@@ -11,7 +11,9 @@
     "icons": "node tools/make-icons.mjs",
     "sw": "node tools/make-sw.mjs",
     "test:browser": "node test/browser.mjs",
-    "test:render": "node test/render.mjs"
+    "test:render": "node test/render.mjs",
+    "dist": "node tools/make-dist.mjs",
+    "test:desktop": "node test/desktop.mjs"
   },
   "keywords": [
     "webgpu",

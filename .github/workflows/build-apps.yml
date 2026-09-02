@@ -1,0 +1,197 @@
+name: Build apps
+
+# Native builds for every platform. Push a tag (v0.1.0) to cut a release with
+# the artifacts attached; run it by hand any time to get downloadable artifacts
+# without publishing anything.
+#
+# None of these are code-signed, which is a deliberate limit rather than an
+# oversight — see docs/PACKAGING.md for what that means on each platform and
+# what it would take to change.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Attach the artifacts to a draft GitHub Release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The same gate the web deploy uses. Nothing gets packaged that does not pass.
+  test:
+    name: Integration suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm test
+
+  web:
+    name: Web bundle
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      # The playable site is deployed by pages.yml straight from the repository.
+      # This is the same files as a zip, for anyone who wants to self-host.
+      - run: node tools/make-dist.mjs dist-web
+      - run: cp sw.js dist-web/sw.js
+      - name: Zip it
+        run: cd dist-web && zip -qr ../STARQUEST-web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: STARQUEST-web.zip
+
+  desktop:
+    name: ${{ matrix.name }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: 'Windows installer', flag: '--win', out: '*.exe' }
+          - { os: macos-latest,   name: 'macOS disk image',  flag: '--mac', out: '*.dmg' }
+          - { os: ubuntu-latest,  name: 'Linux AppImage',    flag: '--linux', out: '*.AppImage' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install packaging dependencies
+        working-directory: packaging/desktop
+        run: npm install --no-audit --no-fund
+      - name: Assemble the game payload
+        run: node tools/make-dist.mjs packaging/desktop/app
+      - name: Smoke-test the shell
+        if: matrix.os == 'ubuntu-latest'
+        run: xvfb-run -a node test/desktop.mjs
+      - name: Package
+        working-directory: packaging/desktop
+        # Unsigned on purpose: signing needs paid certificates on both platforms.
+        # CSC_IDENTITY_AUTO_DISCOVERY=false stops electron-builder picking up a
+        # keychain identity on a self-hosted Mac and failing half way through.
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder ${{ matrix.flag }} --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: packaging/desktop/out/${{ matrix.out }}
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - name: Install Capacitor
+        working-directory: packaging/mobile
+        run: npm install --no-audit --no-fund
+      - name: Generate the Android project
+        working-directory: packaging/mobile
+        # The native project is generated rather than committed: it is thousands
+        # of files of Gradle scaffolding that Capacitor rebuilds identically from
+        # capacitor.config.json, and a stale committed copy is a silent way to
+        # ship an old configuration.
+        run: |
+          node ../../tools/make-dist.mjs packaging/mobile/www
+          npx cap add android
+          npx cap sync android
+      - name: Icons and splash from the game's own artwork
+        working-directory: packaging/mobile
+        run: npx capacitor-assets generate --android
+      - name: Landscape, fullscreen, and keep the screen on
+        run: node tools/patch-android.mjs
+      - name: Build the APK
+        working-directory: packaging/mobile/android
+        # Debug-signed: installs by sideloading with no account or keystore.
+        # A Play Store build needs a release keystore — see docs/PACKAGING.md.
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Name it after the release
+        run: |
+          mkdir -p out
+          cp packaging/mobile/android/app/build/outputs/apk/debug/app-debug.apk \
+             out/STARQUEST-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/STARQUEST-android.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS (compile check)
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install Capacitor
+        working-directory: packaging/mobile
+        run: npm install --no-audit --no-fund
+      - name: Generate the iOS project
+        working-directory: packaging/mobile
+        run: |
+          node ../../tools/make-dist.mjs packaging/mobile/www
+          npx cap add ios
+          npx cap sync ios
+          npx capacitor-assets generate --ios
+      - name: Build unsigned
+        working-directory: packaging/mobile/ios/App
+        # This proves the project compiles. It cannot produce anything anyone
+        # can install: an iOS build is only installable once it is signed with a
+        # certificate from a paid Apple Developer account, and there is no way
+        # around that from CI or anywhere else. See docs/PACKAGING.md.
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -40
+
+  release:
+    name: Draft release
+    # Not gated on the iOS job: it produces no artifact, so a break there should
+    # show up red in Actions without holding back the platforms that do ship.
+    needs: [web, desktop, android]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: artifacts/**/*
+          fail_on_unmatched_files: true
+          body: |
+            Built from `${{ github.sha }}`.
+
+            | Platform | File | Notes |
+            |---|---|---|
+            | Web | play in the browser | https://cyberhirsch.github.io/Starquest/ |
+            | Windows | `STARQUEST-*-windows-setup.exe` | Unsigned — SmartScreen shows "Windows protected your PC". Click **More info → Run anyway**. |
+            | macOS | `STARQUEST-*-macos.dmg` | Unsigned — right-click the app → **Open**, then **Open** again. A plain double-click is refused. |
+            | Linux | `STARQUEST-*-linux.AppImage` | `chmod +x` it and run. |
+            | Android | `STARQUEST-android.apk` | Sideload: allow installs from your browser or file manager, then tap it. |
+            | iOS | — | Not buildable into anything installable without a paid Apple Developer account. |
+
+            Saved games live in each install separately — the browser, the desktop app
+            and the phone build do not share progress.

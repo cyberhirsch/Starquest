@@ -2,3 +2,13 @@ node_modules/
 .DS_Store
 *.log
 docs/shot-*.png
+
+# Packaging: assembled game payload and native build output
+dist/
+packaging/desktop/app/
+packaging/desktop/out/
+packaging/desktop/node_modules/
+packaging/mobile/www/
+packaging/mobile/android/
+packaging/mobile/ios/
+packaging/mobile/node_modules/
