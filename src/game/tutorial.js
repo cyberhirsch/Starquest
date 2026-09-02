@@ -14,8 +14,8 @@ const STEPS = [
   {
     id: 'throttle',
     title: 'BUILD SPEED',
-    touch: 'Drag the bar on the left upward. Above centre is forward, below is reverse.',
-    keys: 'Hold W to open the throttle. S slows you, X cuts it to zero.',
+    touch: 'Drag the bar on the left upward. It sets the speed you want and the drives hold it — above centre is forward, below is astern.',
+    keys: 'Hold W to ask for more speed; the drives hold whatever you set. S slows you, X stops.',
     done: (g) => vlen(g.player.ship.vel) > 45,
   },
   {

@@ -586,6 +586,7 @@ async function start() {
   game.Crew = Crew;
   game.Comms = Comms;
   game.damageShip = damageShip;         // handy from the console, and from tests
+  game.flyShip = flyShip;               // the player's hull is flown here, not in World
   game.classes = { Boarding };          // handy from the console
   game.batch = batch;
   window.STARQUEST = game;

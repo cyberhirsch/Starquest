@@ -87,7 +87,8 @@ export class Player {
     const keepCargo = this.ship ? this.ship.cargo : {};
     const pos = this.ship ? this.ship.pos : v3(0, 0, -1000);
     const quat = this.ship ? this.ship.quat : qid();
-    const s = createShip(entry.classId, 'player', { pos, quat, loadout: entry.loadout, name: 'YOUR SHIP' });
+    const s = createShip(entry.classId, 'player',
+      { pos, quat, loadout: entry.loadout, name: 'YOUR SHIP', speedHold: true });
     s.cargo = keepCargo;
     s.assist = this.assist;
     recalc(s, true);

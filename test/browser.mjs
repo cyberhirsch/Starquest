@@ -59,9 +59,27 @@ const dragBar = async (frac) => {
   await page.mouse.up();
 };
 await dragBar(0.08);
-check('throttle bar drives forward thrust',
+check('throttle bar sets a cruise speed',
   await until(() => window.STARQUEST.player.ship.throttle > 0.5 && Math.hypot(...window.STARQUEST.player.ship.vel) > 5),
-  await read(() => `${window.STARQUEST.player.ship.throttle.toFixed(2)} throttle`));
+  await read(() => `${window.STARQUEST.player.ship.throttle.toFixed(2)} demanded`));
+check('and the HUD names the speed you asked for',
+  await until(() => /SET \d+/.test(document.getElementById('speedSet').textContent), 25),
+  await page.locator('#speedSet').textContent());
+
+// Half-open should settle at half the rating, not keep winding up to it.
+await dragBar(0.5 - 0.5 * 0.5 * 0.82);
+const cruise = await read(async () => {
+  const g = window.STARQUEST;
+  // The player's hull is flown by the frame loop, not by World.update — pumping
+  // the world alone leaves it drifting.
+  const th = g.player.ship.throttle;
+  for (let i = 0; i < 60 * 14; i++) g.flyShip(g.player.ship, { throttle: th }, 1 / 60);
+  return { v: Math.hypot(...g.player.ship.vel), max: g.player.ship.stats.maxSpeed, th };
+});
+await page.screenshot({ path: 'docs/shot-throttle.png' });
+check('half the bar settles at half the rating',
+  Math.abs(cruise.v - cruise.max * cruise.th) < cruise.max * 0.12,
+  `${cruise.v.toFixed(0)} m/s at ${cruise.th.toFixed(2)} of ${cruise.max.toFixed(0)}`);
 
 await dragBar(0.95);
 check('below centre is reverse', await until(() => window.STARQUEST.player.ship.throttle < -0.5));

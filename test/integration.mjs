@@ -1,7 +1,7 @@
 // Headless play-through of the systems the renderer sits on top of.
 // Run: node test/integration.mjs
 
-import { World } from '../src/game/world.js';
+import { World, SECTOR_R } from '../src/game/world.js';
 import { Player } from '../src/game/player.js';
 import { Market, sellAllOre, buyShip, buyModule, repair } from '../src/game/station.js';
 import { Boarding, boardBlocker } from '../src/game/boarding.js';
@@ -38,6 +38,38 @@ section('FLIGHT');
   const before = [...s.quat];
   for (let i = 0; i < 60; i++) flyShip(s, { pitch: 0, yaw: 1, roll: 0, throttle: 0 }, 1 / 60);
   ok('yaw input rotates the hull', Math.abs(s.quat[1] - before[1]) > 0.1);
+}
+{
+  // The throttle names a speed, not an amount of thrust. Every position above
+  // zero used to have the same destination — the hull's maximum — just reached
+  // at different rates, which made the bar a rate control wearing a speed
+  // control's clothes.
+  const s = createShip('shuttle', 'player', { speedHold: true });
+  const hold = (frac, secs) => {
+    for (let i = 0; i < secs * 60; i++) flyShip(s, { throttle: frac }, 1 / 60);
+    return vlen3(s.vel);
+  };
+  const max = s.stats.maxSpeed;
+  const half = hold(0.5, 12);
+  ok('half throttle holds half speed', Math.abs(half - max * 0.5) < max * 0.04,
+    `${half.toFixed(0)} of ${max.toFixed(0)} m/s`);
+  ok('and stays there', Math.abs(hold(0.5, 12) - half) < 1, `${hold(0.5, 2).toFixed(0)} m/s`);
+  const quarter = hold(0.25, 12);
+  ok('a quarter holds a quarter', Math.abs(quarter - max * 0.25) < max * 0.04,
+    `${quarter.toFixed(0)} m/s`);
+  ok('full throttle still reaches the rating', hold(1, 12) > max * 0.97);
+  ok('and zero is a full stop, not a drift', hold(0, 12) < 0.5);
+  const rev = hold(-1, 12);
+  ok('below centre flies backwards', rev > 10 && rev <= max * s.stats.reverse + 2,
+    `${rev.toFixed(0)} m/s astern`);
+
+  // With the assist off the same bar is a thrust lever again, so FULL NEWTONIAN
+  // means what it says: half thrust still winds you past half speed.
+  const n = createShip('shuttle', 'player', { speedHold: true });
+  n.assist = false;
+  for (let i = 0; i < 60 * 20; i++) flyShip(n, { throttle: 0.5 }, 1 / 60);
+  ok('assist off makes it a thrust lever again', vlen3(n.vel) > max * 0.7,
+    `${vlen3(n.vel).toFixed(0)} m/s on half thrust`);
 }
 
 /* ---------------------------------------------------------------- mining */
@@ -206,7 +238,7 @@ section('CHASE');
     qlook(me.quat, vnorm(v3(), vsub(v3(), runner.pos, me.pos)));
     flyShip(me, { pitch: 0, yaw: 0, roll: 0, throttle: 1 }, 1 / 60);
     world.update(1 / 60);
-    if (runner.dead) break;
+    if (runner.dead) break;                 // caught, or it made the sector edge
     gap = vdist(me.pos, runner.pos);
   }
   ok('a fleeing pirate can be run down', gap < 120 || runner.dead,
@@ -656,10 +688,25 @@ section('LEGIBILITY');
   ok('a shot-up runner cannot sprint', hurt < healthy * 0.75,
     `${healthy.toFixed(0)} m/s healthy vs ${hurt.toFixed(0)} at 10% hull (cap ${full.toFixed(0)})`);
 
-  world.ships.push(runner);
-  runner.pos = v3(0, 0, -6000);           // well past the buoys, still running
-  world.confine(runner, 1 / 60);
-  ok('and one that makes the edge is gone', runner.dead && runner.escaped);
+  // Fly it out under its own power rather than teleporting it past the line: an
+  // earlier version of this rule used a distance margin no ship could ever
+  // reach, because the boundary's pull balances a hull's drives about 100 m out
+  // — and a test that placed the ship by hand passed anyway.
+  const w2 = new World(new Player());
+  w2.player.buildShip(w2);
+  w2.generate();
+  const bolter = w2.spawnPirate();
+  bolter.pos = v3(0, 0, -SECTOR_R * 0.97);
+  bolter.vel = v3(0, 0, -60);
+  bolter.hull = bolter.stats.hullMax * 0.1;
+  bolter.target = w2.player.ship;
+  bolter.ai = { role: 'pirate', state: 'flee', t: 0, orbit: 380, sign: 1 };
+  w2.player.ship.pos = v3(0, 0, 0);
+  let out = 0;
+  for (let i = 0; i < 60 * 40 && !bolter.dead; i++) { w2.update(1 / 60); out = i / 60; }
+  ok('and one that makes the edge is gone', bolter.dead && bolter.escaped,
+    bolter.dead ? `gone after ${out.toFixed(0)} s at ${vlen3(bolter.pos).toFixed(0)} m`
+      : `still at ${vlen3(bolter.pos).toFixed(0)} m after 40 s`);
 }
 
 /* ------------------------------------------------------------ simulation */

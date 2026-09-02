@@ -42,13 +42,17 @@ you on a blank canvas.
 
 ## Controls
 
-**Touch** — the left bar is the throttle: above centre is forward, below is reverse,
-double-tap to cut to zero. **FIRE** sits under it. Touch anywhere on the right half to
+**Touch** — the left bar sets the speed you want to fly, not how hard you push: put
+it half way and the drives trim themselves to hold half the hull's rating, rather
+than winding you up to maximum a bit more slowly. Above centre is forward, below is
+astern, double-tap to stop. Switch flight assist off and it is a plain thrust lever
+again. **FIRE** sits under it. Touch anywhere on the right half to
 place the steering stick. `MODE` swaps between the pilot and gunner seats, `TGT`
 cycles contacts, `HAIL` opens a channel to your target, `ACT` docks or boards,
 `INV` opens the loadout, `MENU` pauses and opens the flight manual.
 
-**Keyboard / mouse** — `W`/`S` throttle (`X` to zero, wheel trims) · mouse steers
+**Keyboard / mouse** — `W`/`S` raise and lower the speed you are holding (`X` stops,
+wheel trims) · mouse steers
 (click to capture the pointer; `A`/`D` and the arrows also work) · `Q`/`E` roll ·
 `Space` or click to fire · `R` pilot/gunner · `T` target · `F` dock or board ·
 `H` hail · `Tab` inventory · `1`–`6` pick which mount you are manning ·
@@ -138,9 +142,10 @@ activity, and the belt chatters over the open channel while you fly.
   whatever they have fitted, so a runner can always be run down — your own ships
   keep their full rating, which is part of what you are buying when you upgrade.
   A hull shot below a third loses drive power with it, so a fight you are winning
-  ends in a catch instead of a stern chase; one that reaches the buoys still
-  running is gone for good. Shoot a licensed hull and the Authority prices your
-  head; kill a pirate and you are paid a bounty.
+  ends in a catch instead of a stern chase. One that breaks off badly hurt commits
+  to leaving rather than circling back, and if it reaches the buoys still running
+  it is gone for good — chase it down or let it go. Shoot a licensed hull and the
+  Authority prices your head; kill a pirate and you are paid a bounty.
 - **Read the fight.** Anything that can hurt you is drawn red — your own fire
   keeps its colour and neutral traffic is dim. The name of whoever is shooting
   you sits under the topbar, their bearing on a ring around the reticle, and hull

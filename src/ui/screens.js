@@ -41,6 +41,8 @@ export class UI {
       threatName: document.getElementById('threatName'),
       threatInfo: document.getElementById('threatInfo'),
       speed: document.getElementById('speedVal'),
+      speedSet: document.getElementById('speedSet'),
+      thrMax: document.getElementById('thrMax'),
       vitals: document.getElementById('vitals'),
       hullBar: document.getElementById('hullBar'),
       hullVal: document.getElementById('hullVal'),
@@ -90,7 +92,20 @@ export class UI {
     if (world.sector) this.el.sectorName.textContent = world.sector.name;
     this.el.modeTag.textContent = player.mode === 'gunner'
       ? `GUNNER · ${g.autopilot || 'HOLD'}` : 'PILOT';
-    this.el.speed.textContent = Math.round(vlen(ship.vel));
+    const speed = vlen(ship.vel);
+    this.el.speed.textContent = Math.round(speed);
+    // The throttle names a speed, so say which one until you are sitting on it.
+    const want = ship.speedHold && ship.assist
+      ? Math.round(ship.throttle * ship.stats.maxSpeed
+        * (ship.throttle < 0 ? ship.stats.reverse : 1)) : null;
+    const setTag = want === null || Math.abs(Math.abs(want) - speed) < 4 ? ''
+      : `SET ${want < 0 ? `${Math.abs(want)} REV` : want}`;
+    if (this._setTag !== setTag) { this._setTag = setTag; this.el.speedSet.textContent = setTag; }
+    // Top of the bar is the hull's rated speed, so the control reads as the
+    // speed dial it now is. Changes with the ship and its thrusters, so it is
+    // written only when it moves.
+    const top = ship.speedHold && ship.assist ? String(Math.round(ship.stats.maxSpeed)) : 'FWD';
+    if (this._thrTop !== top) { this._thrTop = top; this.el.thrMax.textContent = top; }
 
     // vitals: the number, not just a bar — dying should never be a surprise
     const hullFrac = clamp(ship.hull / ship.stats.hullMax, 0, 1);
@@ -746,14 +761,14 @@ export class UI {
       <button class="hbtn" data-do="close">RESUME</button></header>
       <div class="body"><div class="cols">
       <div class="section"><h3>CONTROLS — ${touch ? 'TOUCH' : 'KEYBOARD'}</h3><div class="list">${(touch ? [
-        ['LEFT BAR', 'Throttle. Up is forward, below centre is reverse. Double-tap to cut to zero.'],
+        ['LEFT BAR', 'Sets the speed you want to fly, not how hard you push — the drives trim themselves to hold it. Up is forward, below centre is astern, double-tap to stop. With flight assist off it is a plain thrust lever again.'],
         ['RIGHT SIDE', 'Steering stick — touch anywhere on the right to place it.'],
         ['FIRE', 'Fires the mount you are manning.'],
         ['MODE', 'Switch between piloting and the gunner seat.'],
         ['TGT', 'Cycle contacts. ACT docks, boards, or scoops.'],
         ['INV', 'Inventory, loadout and ship record.'],
       ] : [
-        ['W / S', 'Throttle up and down · X cuts to zero · wheel trims'],
+        ['W / S', 'Raise and lower the speed you are holding · X stops · wheel trims'],
         ['MOUSE', 'Steer (click to capture the pointer) · A/D and arrows also steer'],
         ['Q / E', 'Roll'],
         ['SPACE / CLICK', 'Fire the manned mount'],

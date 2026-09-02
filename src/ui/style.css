@@ -162,6 +162,11 @@ body.touch #threat { font-size: 10px; max-width: 46vw; }
 #speedout { position: absolute; left: 14px; top: calc(50% + 60px); font-size: 11px; }
 #speedout b { font-size: 15px; color: var(--green); }
 #speedout span { color: var(--dim); margin-left: 4px; }
+/* The speed you asked the throttle for, so you can tell "still winding up" from
+   "this is my cruise". Hidden when it matches, and when the assist is off and
+   the bar is a thrust lever again with no speed to name. */
+#speedout i { display: block; margin-top: 1px; font-style: normal; font-size: 9.5px;
+  color: var(--amber); letter-spacing: 0.1em; }
 
 /* Sits above #touchUI: the stick zone is a big invisible rectangle that reaches
    down over the top of these buttons, and whichever paints last wins the tap.

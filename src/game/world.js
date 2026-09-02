@@ -752,21 +752,30 @@ export class World {
   confine(s, dt) {
     const d2 = vlen2(s.pos);
     if (d2 <= SECTOR_R * SECTOR_R) return;
-    // A fighter running for its life and already past the buoys is gone — it
-    // made it. Bouncing it off an invisible wall left beaten pirates circling
-    // the edge forever, so a fight you had won never actually ended.
-    if (s !== this.player.ship && !s.wing && s.ai?.state === 'flee'
-      && d2 > SECTOR_R * SECTOR_R * 1.06) {
-      s.dead = true;
-      s.escaped = true;
-      s.deadAt = this.time;         // reaped by the sweep below, with no explosion
-      if (s.target === this.player.ship || s.angryAt === this.player.ship) {
-        this.log(`${s.name} MADE IT OUT`, 'warn');
-      }
-      return;
-    }
     const d = Math.sqrt(d2);
     vnorm(_a, s.pos);
+    // A fighter running for its life, past the buoys and still pushing outward,
+    // is gone — it made it. Bouncing it off an invisible wall left beaten
+    // pirates circling the edge forever, so a fight you had won never ended.
+    //
+    // The test is where its nose is pointed, not how fast it is going or how far
+    // out it has got. The boundary's pull balances a hull's drives within ~40 m
+    // of the line whatever its rating, so a ship pressed against it has a
+    // velocity near zero and can never reach a distance margin big enough to be
+    // unambiguous — both of the obvious tests are unsatisfiable by construction.
+    if (s !== this.player.ship && !s.wing && s.ai?.state === 'flee'
+      && d > SECTOR_R && vdot(qforward(_b, s.quat), _a) > 0.5) {
+      s.outbound = (s.outbound || 0) + dt;
+      if (s.outbound > 2) {
+        s.dead = true;
+        s.escaped = true;
+        s.deadAt = this.time;       // reaped by the sweep below, with no explosion
+        if (s.target === this.player.ship || s.angryAt === this.player.ship) {
+          this.log(`${s.name} MADE IT OUT`, 'warn');
+        }
+        return;
+      }
+    } else s.outbound = 0;
     const pull = (d - SECTOR_R) * 0.6;
     vaddScaled(s.vel, s.vel, _a, -pull * dt);
     if (s === this.player.ship && this.time - (this._edgeWarn || -99) > 6) {

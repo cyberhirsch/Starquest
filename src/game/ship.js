@@ -22,6 +22,12 @@ const TRUCE_BREAK = 0.08;
 /** Seconds over which a truce-breaking tally fades back to nothing. */
 const TRUCE_FORGET = 4;
 
+/**
+ * Seconds of thrust the speed-hold looks ahead by. Larger settles more gently
+ * and overshoots less; smaller snaps to the demanded speed but can hunt.
+ */
+const SPEED_TRIM = 0.55;
+
 /** Mount positions, spread over the hull so turret fire visibly converges. */
 function hardpointOffsets(cls) {
   const r = cls.radius;
@@ -69,6 +75,9 @@ export function createShip(classId, faction = 'civilian', opts = {}) {
     ai: null, target: null,
     // Set before recalc, because recalc reads it to decide the speed cap.
     wing: !!opts.wing,
+    // Throttle means "hold this speed" rather than "apply this much thrust".
+    // Only the player flies this way; the AI brains are written in thrust terms.
+    speedHold: !!opts.speedHold,
     scale: cls.scale ?? 1,
     radius: cls.radius,
     beam: null,                       // active mining beam endpoint, for rendering
@@ -197,7 +206,25 @@ export function flyShip(ship, control, dt) {
   const role = ship.ai?.role;
   const limp = !dead && ship.faction !== 'player' && (role === 'pirate' || role === 'security')
     ? lerp(0.55, 1, clamp(ship.hull / s.hullMax / LIMP_AT, 0, 1)) : 1;
-  const accel = (th >= 0 ? s.accel * th : s.accel * th * s.reverse) * limp;
+
+  // The throttle is a speed selector, not a thrust lever. Half-open used to mean
+  // half thrust, which just wound you up to the hull's maximum a bit more slowly
+  // — every position above zero had the same destination. Now it names the speed
+  // you want and the assist computer trims the drives to sit there, which is
+  // what the bar has always looked like it was doing.
+  //
+  // Only with the assist on: holding a speed IS the assist doing it for you.
+  // Switch it off and the same bar is a raw thrust lever again, so FULL
+  // NEWTONIAN means what it says.
+  let demand = th;
+  if (ship.speedHold && ship.assist && !dead) {
+    const want = th * s.maxSpeed * (th < 0 ? s.reverse : 1);
+    const have = vdot(ship.vel, _f);
+    const gap = want - have;
+    // Full thrust until close, then ease in, so it settles rather than hunting.
+    demand = clamp(gap / Math.max(1, s.accel * SPEED_TRIM), -1, 1);
+  }
+  const accel = (demand >= 0 ? s.accel * demand : s.accel * demand * s.reverse) * limp;
   vaddScaled(ship.vel, ship.vel, _f, accel * dt);
 
   if (ship.assist && !dead) {
@@ -207,7 +234,12 @@ export function flyShip(ship, control, dt) {
     vsub(_lat, ship.vel, _lat);
     const damp = Math.exp(-1.9 * dt);
     vscale(_lat, _lat, damp);                            // sideways component decays
-    vscale(_tmp, _f, along);                             // forward component is kept
+    // Asking for zero means stopped. The speed trim eases off as the gap closes,
+    // so on its own it leaves you drifting at a few m/s for ever — which is not
+    // what "cut to zero" promises.
+    const fwd = ship.speedHold && Math.abs(th) < 0.02 && Math.abs(along) < 8
+      ? along * Math.exp(-4 * dt) : along;
+    vscale(_tmp, _f, fwd);                               // forward component is kept
     vadd(ship.vel, _lat, _tmp);
     const sp = vlen(ship.vel);
     const cap = s.maxSpeed * limp;

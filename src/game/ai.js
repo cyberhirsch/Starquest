@@ -129,10 +129,17 @@ function combat(ship, world, dt, control, fleeAt) {
     vnorm(_dir, _dir);
     steer(ship, _dir, control, 1.6);
     control.throttle = 1;
-    // A truce keeps them running until it lapses; otherwise distance or a
-    // recovered hull turns them around.
+    // A truce keeps them running until it lapses. Otherwise a hull that has
+    // actually recovered turns around — but a badly hurt one commits to leaving
+    // rather than coming back for more.
+    //
+    // Distance used to end a flee on its own, at 2600 m. That is why beaten
+    // pirates circled the belt forever: they broke off, got clear, immediately
+    // stopped fleeing, turned round and came back, so no fight ever finished and
+    // no runner ever actually left. Now they run for the sector edge and are
+    // gone (see World.confine) unless a repair module patches them up first.
     if (!(truce && t === world.player.ship)
-      && (dist > 2600 || hullFrac > fleeAt + 0.25)) ai.state = 'hunt';
+      && (hullFrac > fleeAt + 0.25 || (dist > 2600 && hullFrac > fleeAt))) ai.state = 'hunt';
     return;
   }
 
