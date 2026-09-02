@@ -42,29 +42,44 @@ if (!existsSync(join(DESKTOP, 'app/index.html'))) {
 // copy anywhere else looks for the game in the wrong place and serves 404s.
 const probe = join(DESKTOP, `main.probe.${process.pid}.js`);
 writeFileSync(probe, `${readFileSync(join(DESKTOP, 'main.js'), 'utf8')}
+// --- probe ------------------------------------------------------------------
+// Listeners are attached the moment the window is created, and the probe waits
+// for did-finish-load rather than sleeping and reloading. The first version
+// slept, reloaded, and slept again, which raced: on a slow runner the reload
+// landed before the listener was live and Electron exited with nothing printed.
 const errors = [];
-setTimeout(async () => {
-  const win = BrowserWindow.getAllWindows()[0];
-  if (!win) { console.log('PROBE ' + JSON.stringify({ window: false })); return app.exit(0); }
-  win.webContents.on('console-message', (_e, lvl, msg) => { if (lvl >= 2) errors.push(msg); });
-  await win.webContents.reload();
-  await new Promise((r) => setTimeout(r, 9000));
-  let out = { window: true, errors };
-  try {
-    out = { ...out, ...await win.webContents.executeJavaScript(\`(() => ({
-      url: location.href,
-      secure: window.isSecureContext,
-      hasGPU: 'gpu' in navigator,
-      // Set at the top of src/main.js's module body, so it is only ever true if
-      // the whole import graph resolved and ran.
-      modulesRan: typeof window.STARQUEST !== 'undefined' || !!document.querySelector('#ui'),
-      hasCanvas: !!document.getElementById('gl'),
-      storage: (() => { try { localStorage.setItem('t', '1'); return localStorage.getItem('t') === '1'; } catch { return false; } })(),
-    }))()\`) };
-  } catch (e) { out.evalError = e.message; }
-  console.log('PROBE ' + JSON.stringify(out));
+let reported = false;
+const report = (o) => {
+  if (reported) return;
+  reported = true;
+  console.log('PROBE ' + JSON.stringify({ ...o, errors }));
   app.exit(0);
-}, 2500);
+};
+
+app.on('browser-window-created', (_e, win) => {
+  win.webContents.on('console-message', (_ev, lvl, msg) => { if (lvl >= 2) errors.push(msg); });
+  win.webContents.on('did-fail-load', (_ev, code, desc, url) => {
+    errors.push(\`did-fail-load \${code} \${desc} \${url}\`);
+  });
+  win.webContents.once('did-finish-load', async () => {
+    // Let the game's own boot run; it reports its graphics error asynchronously.
+    await new Promise((r) => setTimeout(r, 6000));
+    try {
+      report({ window: true, ...await win.webContents.executeJavaScript(\`(() => ({
+        url: location.href,
+        secure: window.isSecureContext,
+        hasGPU: 'gpu' in navigator,
+        modulesRan: typeof window.STARQUEST !== 'undefined' || !!document.querySelector('#ui'),
+        hasCanvas: !!document.getElementById('gl'),
+        storage: (() => { try { localStorage.setItem('t', '1'); return localStorage.getItem('t') === '1'; } catch { return false; } })(),
+      }))()\`) });
+    } catch (e) { report({ window: true, evalError: e.message }); }
+  });
+});
+
+// Backstop: say something whatever happens, rather than exiting silently.
+setTimeout(() => report({ window: BrowserWindow.getAllWindows().length > 0, timedOut: true }), 40000);
+app.on('window-all-closed', () => report({ window: false, closed: true }));
 `);
 
 const args = [probe, '--no-sandbox'];
@@ -74,7 +89,7 @@ child.stdout.on('data', (d) => { stdout += d; });
 child.stderr.on('data', (d) => { stdout += d; });
 
 const code = await new Promise((resolve) => {
-  const timer = setTimeout(() => { child.kill('SIGKILL'); resolve('timeout'); }, 60000);
+  const timer = setTimeout(() => { child.kill('SIGKILL'); resolve('timeout'); }, 90000);
   child.on('exit', (c) => { clearTimeout(timer); resolve(c); });
 });
 
@@ -89,7 +104,9 @@ const ok = (name, cond, extra = '') => {
 };
 
 console.log('DESKTOP SHELL');
-ok('the app starts and opens a window', !!r && r.window, code === 'timeout' ? 'timed out' : `exit ${code}`);
+ok('the app starts and opens a window', !!r && r.window,
+  !r ? `no probe output, exit ${code}` : r.timedOut ? 'timed out waiting for load'
+    : r.closed ? 'window closed before it loaded' : `exit ${code}`);
 if (r && r.window) {
   ok('served over the app:// scheme', /^app:\/\//.test(r.url || ''), r.url);
   ok('which is a secure context', r.secure === true);
