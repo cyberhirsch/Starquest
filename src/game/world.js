@@ -90,7 +90,6 @@ export class World {
     return lerp(0.45, 1, t / 1.5);
   }
 
-  /** Tell the player what just hit them, and from where. */
   /** Damage taken in the last DAMAGE_WINDOW seconds, grouped by what caused it. */
   noteDamageSource(src, cause, amount) {
     const label = cause === 'collision' ? 'COLLISION'
