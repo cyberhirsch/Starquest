@@ -31,7 +31,10 @@ const money = (n) => Math.round(n / 50) * 50;
 
 function bountyContract(world, player) {
   const count = 2 + randi(3);
-  const tier = 1 + player.threat * 0.5;
+  // Rough space pays better. This used to scale with the player's own threat
+  // score, which meant the same job at the same board paid more once you were
+  // rich — the reward followed your wealth rather than the work.
+  const tier = 1 + (world.sector?.danger ?? 0) * 0.5;
   return {
     id: `c${NEXT++}`, type: 'bounty', need: count, progress: 0,
     title: `BOUNTY — ${count} PIRATE HULLS`,

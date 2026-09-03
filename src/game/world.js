@@ -104,8 +104,10 @@ export class World {
 
   /** New pilots take a fraction of every hit until they have some standing. */
   playerDamageScale() {
-    const t = clamp(this.player.threat, 0, 1.5);
-    return lerp(0.45, 1, t / 1.5);
+    // A region's own figure, not a curve that follows the player up. The old
+    // version doubled incoming damage over the first dozen kills, so the place
+    // you had just learned to survive quietly stopped being survivable.
+    return this.sector?.damage ?? 1;
   }
 
   /** Damage taken in the last DAMAGE_WINDOW seconds, grouped by what caused it. */
@@ -339,8 +341,18 @@ export class World {
 
   /* ------------------------------------------------------------ spawns -- */
 
+  /**
+   * How rough this region is, as a tier. Fixed per sector, with an occasional
+   * spike so it is a place with a character rather than a fixed spawn table —
+   * roughly one hull in four arrives a notch above the local standard.
+   */
+  danger() {
+    const base = this.sector?.danger ?? 0;
+    return Math.min(3, Math.floor(base + (Math.random() < 0.25 ? 1 : 0)));
+  }
+
   spawnPirate(far = false) {
-    const tier = Math.min(3, Math.floor(this.player.threat));
+    const tier = this.danger();
     const cls = tier >= 2 && Math.random() < 0.35 ? 'marauder' : pick(['corsair', 'marauder', 'shuttle']);
     const guns = tier >= 2 ? ['burst', 'auto2', 'auto1'] : tier >= 1 ? ['pulse', 'auto1', null] : ['pulse', null, null];
     const s = createShip(cls, 'pirate', {
@@ -355,10 +367,10 @@ export class World {
     s.ai = {
       role: 'pirate', state: 'hunt', t: 0,
       orbit: rand(420, 220), sign: Math.random() < 0.5 ? 1 : -1,
-      // Tier 0 pirates fly straight and take their beating, so the first hour
-      // stays a place you can learn to shoot in. From tier 1 they jink once
-      // you start landing rounds.
-      evade: tier >= 1,
+      // Some of them can fly and some cannot, decided per pilot from the
+      // region's own figure. Gating this on the player's kill count meant every
+      // pirate in the sector learned to jink on the same afternoon you did.
+      evade: Math.random() < (this.sector?.evasive ?? 0.3),
     };
     this.ships.push(s);
     return s;
@@ -1041,7 +1053,7 @@ export class World {
     this.traderTimer -= dt;
     const pirates = this.ships.filter((s) => s.faction === 'pirate' && !s.dead).length;
     const want = this.grace > 0 ? 0
-      : Math.round((2 + Math.floor(this.player.threat)) * (this.sector?.pirates ?? 1));
+      : Math.round((2 + Math.floor(this.sector?.danger ?? 0)) * (this.sector?.pirates ?? 1));
 
     // Clearing the belt buys a real rest. Fighting to the last hull only to have
     // the next one arrive twenty seconds later means the work never counted for
@@ -1056,7 +1068,10 @@ export class World {
     if (this.spawnTimer <= 0) {
       this.spawnTimer = rand(45, 25);
       // early on they always arrive from a distance, so you see them coming
-      if (pirates < want) this.spawnPirate(this.player.threat < 1 ? true : Math.random() < 0.5);
+      // In quiet space they always arrive from the edge, so you see them coming.
+      if (pirates < want) {
+        this.spawnPirate((this.sector?.danger ?? 0) < 1 ? true : Math.random() < 0.5);
+      }
     }
     if (this.traderTimer <= 0) {
       this.traderTimer = rand(50, 25);

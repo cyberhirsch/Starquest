@@ -10,6 +10,7 @@ import { MODULES } from '../src/game/data.js';
 import * as Contracts from '../src/game/contracts.js';
 import * as Crew from '../src/game/crew.js';
 import * as Comms from '../src/game/comms.js';
+import { SECTORS } from '../src/game/sectors.js';
 import { v3, vsub, vnorm, vdist, vlen as vlen3, qlook, leadTarget } from '../src/core/math.js';
 
 let pass = 0, fail = 0;
@@ -840,18 +841,74 @@ section('EVASION');
   ok('jinking beats a perfect lead', jinking < straight * 0.8,
     `${straight.toFixed(0)}% of shots connect against a straight flyer, ${jinking.toFixed(0)}% against a jinker`);
 
-  // It is gated on being shot at, so a pirate that has not noticed you still
-  // flies its ordinary approach — and on tier, so the first hour is learnable.
+  // Who can fly is decided per pilot from the region's own figure, so a belt
+  // has a mix rather than a switch that flips for everyone at once.
   const w = new World(new Player());
   w.player.buildShip(w);
   w.generate();
   w.log = () => {};
-  const fresh = w.spawnPirate();
-  ok('tier 0 pirates do not evade', w.player.threat < 1 && fresh.ai.evade === false,
-    `threat ${w.player.threat.toFixed(2)}`);
-  w.player.stats.kills = 40;                 // threat well past 1
-  ok('but they do once you are worth the trouble', w.spawnPirate().ai.evade === true,
-    `threat ${w.player.threat.toFixed(2)}`);
+  const rate = (sector, n = 400) => {
+    w.sector = SECTORS[sector];
+    let evasive = 0;
+    for (let i = 0; i < n; i++) if (w.spawnPirate().ai.evade) evasive++;
+    w.ships.length = 0;
+    return evasive / n;
+  };
+  const quiet = rate('halcyon'), rough = rate('cinder');
+  ok('a quiet belt has some pilots who can fly and some who cannot',
+    quiet > 0.15 && quiet < 0.5, `${(quiet * 100).toFixed(0)}% evasive in Halcyon`);
+  ok('and a rough one has mostly the former', rough > quiet + 0.25,
+    `${(rough * 100).toFixed(0)}% in Cinder`);
+}
+
+/* ------------------------------------------------------------- regions */
+section('REGIONS');
+{
+  // A region has a fixed character. Difficulty used to key off a player threat
+  // score, so four things stepped up on the same kill and buying the ship you
+  // had saved for made the sector you were standing in measurably worse.
+  const look = (kills, ship) => {
+    const p = new Player();
+    p.stats.kills = kills;
+    p.wanted = kills * 200;
+    if (ship) {
+      p.hangar.push({ classId: ship, loadout: { hardpoints: [], utility: [] } });
+      p.active = p.hangar.length - 1;
+    }
+    const w = new World(p);
+    p.buildShip(w);
+    w.generate('halcyon');
+    w.log = () => {};
+    let guns = 0;
+    for (let i = 0; i < 200; i++) {
+      guns += w.spawnPirate().hardpoints.filter((h) => MODULES[h.moduleId]).length;
+      w.ships.length = 0;
+    }
+    return { quota: Math.round((2 + Math.floor(w.sector.danger)) * w.sector.pirates),
+      guns: guns / 200, dmg: w.playerDamageScale() };
+  };
+  const fresh = look(0, null), veteran = look(50, 'bastion');
+  ok('the home belt does not get harder because you did',
+    fresh.quota === veteran.quota && fresh.dmg === veteran.dmg
+      && Math.abs(fresh.guns - veteran.guns) < 0.25,
+    `${fresh.quota} pirates / ${fresh.guns.toFixed(2)} guns / ${(fresh.dmg * 100).toFixed(0)}% dmg `
+    + `fresh, vs ${veteran.quota} / ${veteran.guns.toFixed(2)} / ${(veteran.dmg * 100).toFixed(0)}% `
+    + 'after 50 kills and a Bastion');
+
+  // ...but it is not a fixed spawn table either: about one in four arrives a
+  // notch above the local standard, so a belt has bad days.
+  ok('though it still has bad days', fresh.guns > 1.05 && fresh.guns < 1.6,
+    `${fresh.guns.toFixed(2)} guns per hull against a tier-0 standard of 1`);
+
+  // Progression is going somewhere rougher, not outgrowing where you are.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate('cinder');
+  w.log = () => {};
+  ok('and the reach is a different place, not a later one',
+    w.sector.danger > SECTORS.halcyon.danger && w.playerDamageScale() > 0.9,
+    `danger ${w.sector.danger} vs ${SECTORS.halcyon.danger}, damage `
+    + `${(w.playerDamageScale() * 100).toFixed(0)}% vs ${(SECTORS.halcyon.damage * 100).toFixed(0)}%`);
 }
 
 /* --------------------------------------------------------------- pacing */

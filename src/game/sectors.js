@@ -1,6 +1,13 @@
 // Sectors. Each one is a place with its own rock, its own trouble, and one
 // station; jump gates link them. The renderer, AI and economy are all
 // sector-agnostic, so a sector is very nearly just data.
+//
+// `danger` is the one that matters most: a region has a fixed character and
+// keeps it. The belt does not get harder because you got better at it — you
+// find harder places by flying to them. Difficulty used to key off a player
+// `threat` score, which meant four separate things stepped up on the same kill
+// and buying the ship you had saved for made the sector you were standing in
+// measurably worse.
 
 export const SECTORS = {
   halcyon: {
@@ -14,6 +21,9 @@ export const SECTORS = {
     miners: 2,
     derelicts: 0,
     lawful: true,
+    danger: 0.35,                     // licensed space: pulse cannons and bad ideas
+    damage: 0.6,                      // and the Authority's medical cover is decent
+    evasive: 0.3,                     // a third of them can actually fly
     station: {
       id: 'depot',
       name: 'HALCYON DEPOT',
@@ -35,11 +45,14 @@ export const SECTORS = {
     blurb: 'A graveyard. Hulls that never came home, scavengers who did, and nobody wearing a badge.',
     asteroids: 110,
     oreBias: { iron: 1.6, silicon: 1.4, ice: 0.5, gold: 0.7, platinum: 1.1, xenite: 1.8 },
-    pirates: 2.4,
+    pirates: 1.6,
     traders: 0.35,
     miners: 1,
     derelicts: 7,                     // adrift hulls, there for the boarding
     lawful: false,
+    danger: 1.8,                      // turrets, thrusters, and nobody coming to help
+    damage: 1.0,
+    evasive: 0.75,
     station: {
       id: 'tallow',
       name: 'TALLOW YARD',

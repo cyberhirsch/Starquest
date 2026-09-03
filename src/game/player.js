@@ -77,11 +77,6 @@ export class Player {
     this.assist = true;
   }
 
-  get threat() {
-    const value = SHIPS[this.hangar[this.active].classId].price;
-    return Math.min(3, value / 55000 + this.stats.kills / 14 + this.wanted / 6000);
-  }
-
   buildShip(world) {
     const entry = this.hangar[this.active];
     const keepCargo = this.ship ? this.ship.cargo : {};

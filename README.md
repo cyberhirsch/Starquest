@@ -90,6 +90,24 @@ and whenever the page is hidden or closed — so swiping the app away does not c
 progress. `SAVE NOW` and `RELOAD LAST SAVE` live in the manual (`M`, or the flight
 manual button).
 
+## A region has a character
+
+Difficulty belongs to the place, not to you. Halcyon is the same belt on your
+first flight as it is fifty kills and a Bastion later: two pirates at a time,
+pulse cannons, arriving from the sector edge where you can see them coming, and
+you take 60% damage. It is not a fixed spawn table either — roughly one hull in
+four turns up a notch above the local standard, and about a third of the pilots
+can actually fly, so a quiet belt still has bad days.
+
+Cinder Reach is not a later stage of that, it is a rougher place: five at a
+time, turrets and thrusters as standard, three quarters of them evasive, full
+damage, and nobody coming when you call. You get there by flying through a gate,
+not by levelling up.
+
+The point is that the belt you learned to survive stays survivable. Getting
+better and buying a bigger hull is supposed to make you stronger where you are —
+if the sector answers by getting stronger too, the upgrade bought you nothing.
+
 ## Two sectors
 
 **Halcyon Belt** is licensed, patrolled and rich in rock. **Cinder Reach** through the
@@ -179,8 +197,8 @@ activity, and the belt chatters over the open channel while you fly.
   you sits under the topbar, their bearing on a ring around the reticle, and hull
   and shield are on screen as numbers. Shields giving out strobes the panel. When
   you do die, the screen names the ship that killed you and shows what share of
-  the damage came from where. New pilots take reduced damage until they have some
-  standing, and the belt stays quiet for the first minute.
+  the damage came from where. The belt stays quiet for the first minute of a new
+  game, and the licensed belt is a gentler place to be shot at than the reach.
 - **Board.** Ion weapons and heavy damage leave hulls adrift instead of scattering
   them. Carry a breaching rig, match velocity, and cut your way in — three clean
   charges strips the hold and files a claim on the hull worth half price at the yard.
