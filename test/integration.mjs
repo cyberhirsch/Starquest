@@ -10,7 +10,7 @@ import { MODULES } from '../src/game/data.js';
 import * as Contracts from '../src/game/contracts.js';
 import * as Crew from '../src/game/crew.js';
 import * as Comms from '../src/game/comms.js';
-import { v3, vsub, vnorm, vdist, vlen as vlen3, qlook } from '../src/core/math.js';
+import { v3, vsub, vnorm, vdist, vlen as vlen3, qlook, leadTarget } from '../src/core/math.js';
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => {
@@ -707,6 +707,65 @@ section('LEGIBILITY');
   ok('and one that makes the edge is gone', bolter.dead && bolter.escaped,
     bolter.dead ? `gone after ${out.toFixed(0)} s at ${vlen3(bolter.pos).toFixed(0)} m`
       : `still at ${vlen3(bolter.pos).toFixed(0)} m after 40 s`);
+}
+
+/* -------------------------------------------------------------- evasion */
+section('EVASION');
+{
+  // Being shot used to change a pirate's flight not at all: it read its own
+  // hull only to pick between orbiting and running, and running was a dead
+  // straight line — the easiest shot in the game against a lead solution.
+  const shootAt = (evade) => {
+    let shots = 0, dealt = 0;
+    for (let r = 0; r < 6; r++) {
+      const w = new World(new Player());
+      w.player.buildShip(w);
+      w.generate();
+      w.grace = 9999;
+      w.log = () => {};
+      for (const x of [...w.ships]) if (x.faction === 'pirate') w.ships.splice(w.ships.indexOf(x), 1);
+      const me = w.player.ship;
+      me.pos = v3(0, 0, 0); me.vel = v3(0, 0, 0);
+      const p = w.spawnPirate();
+      p.pos = v3(0, 0, -900); p.vel = v3(0, 0, 0);
+      p.ai = { role: 'pirate', state: 'hunt', t: 0, orbit: 900, sign: 1, evade };
+      p.target = me; p.angryAt = me;
+      // immortal, so the measurement is hit rate rather than time to kill
+      p.stats.hullMax = 1e9; p.hull = 1e9; p.shield = 0; p.stats.shieldMax = 0;
+      const gun = me.hardpoints.find((h) => MODULES[h.moduleId] && !MODULES[h.moduleId].beam);
+      const m = MODULES[gun.moduleId];
+      for (let i = 0; i < 60 * 12; i++) {
+        me.energy = me.stats.energyMax;
+        const before = p.hull;
+        if (gun.cd <= 0 && vdist(me.pos, p.pos) < m.range) {
+          // a perfect lead — exactly what an auto-turret computes
+          const lead = leadTarget(v3(), me.pos, p.pos, p.vel, m.speed);
+          const dir = vnorm(v3(), vsub(v3(), lead, me.pos));
+          qlook(me.quat, dir);
+          if (fireMount(me, gun, dir, w, p, 1 / 60)) shots++;
+        }
+        w.update(1 / 60);
+        dealt += Math.max(0, before - p.hull);
+      }
+    }
+    return shots ? (dealt / shots) / MODULES.pulse.dmg * 100 : 0;
+  };
+  const straight = shootAt(false), jinking = shootAt(true);
+  ok('jinking beats a perfect lead', jinking < straight * 0.8,
+    `${straight.toFixed(0)}% of shots connect against a straight flyer, ${jinking.toFixed(0)}% against a jinker`);
+
+  // It is gated on being shot at, so a pirate that has not noticed you still
+  // flies its ordinary approach — and on tier, so the first hour is learnable.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  w.log = () => {};
+  const fresh = w.spawnPirate();
+  ok('tier 0 pirates do not evade', w.player.threat < 1 && fresh.ai.evade === false,
+    `threat ${w.player.threat.toFixed(2)}`);
+  w.player.stats.kills = 40;                 // threat well past 1
+  ok('but they do once you are worth the trouble', w.spawnPirate().ai.evade === true,
+    `threat ${w.player.threat.toFixed(2)}`);
 }
 
 /* --------------------------------------------------------------- pacing */

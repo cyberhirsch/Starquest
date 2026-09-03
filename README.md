@@ -162,6 +162,11 @@ activity, and the belt chatters over the open channel while you fly.
 - **Fight.** Pirates hunt the belt. Computer-flown hulls are capped at 150 m/s
   whatever they have fitted, so a runner can always be run down — your own ships
   keep their full rating, which is part of what you are buying when you upgrade.
+  Land a few rounds and they stop flying predictably: anything above the lowest
+  tier jinks while it is under fire, which halves your hit rate past 700 m and
+  turns a runner from a free kill into work. Close the range and it stops
+  helping them — nothing dodges a 900 m/s bolt at 300 m — so a knife fight is
+  still a knife fight, and still where you take the most damage.
   A hull shot below a third loses drive power with it, so a fight you are winning
   ends in a catch instead of a stern chase. One that breaks off badly hurt commits
   to leaving rather than circling back, and if it reaches the buoys still running

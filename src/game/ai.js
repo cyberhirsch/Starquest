@@ -8,7 +8,8 @@ import { MODULES } from './data.js';
 import { fireMount, mountWorldPos, cargoFree } from './ship.js';
 import { chatter } from './comms.js';
 
-const _dir = v3(), _loc = v3(), _lead = v3(), _tmp = v3(), _mz = v3(), _q = [0, 0, 0, 1];
+const _dir = v3(), _loc = v3(), _lead = v3(), _tmp = v3(), _mz = v3(), _evade = v3(),
+  _los = v3(), _q = [0, 0, 0, 1];
 
 /** Point the nose at a world-space direction. Returns the angle error (rad). */
 export function steer(ship, dirWorld, control, gain = 1.8) {
@@ -57,6 +58,50 @@ export const TRUCE = 75;
 
 export const inTruce = (ship, world) =>
   ship.paidOff != null && world.time - ship.paidOff < TRUCE;
+
+/**
+ * How long after a hit a pilot keeps jinking. Long enough to cover the gap
+ * between bursts, short enough that they settle and fight once you stop.
+ */
+const EVADE_FOR = 2.5;
+
+/**
+ * Break up a heading so it cannot be led. leadTarget solves constant velocity
+ * exactly, so the only thing that beats it is changing direction — not speed,
+ * and not a curve smooth enough to extrapolate. Hence a random axis held for a
+ * short, irregular beat rather than a sine wave.
+ *
+ * Only pilots who have been shot at in the last EVADE_FOR seconds do this, so a
+ * pirate that has not noticed you still flies its ordinary approach.
+ */
+function jink(ship, world, dt, dir) {
+  const ai = ship.ai;
+  if (!ai.evade || world.time - ship.lastHitAt > EVADE_FOR) return dir;
+  ai.jinkT = (ai.jinkT ?? 0) - dt;
+  if (ai.jinkT <= 0) {
+    ai.jinkT = rand(0.9, 0.35);
+    ai.jinkAxis = vrandSphere(ai.jinkAxis || v3(), 1);
+    // Reversing the orbit now and then matters more than the wobble: a fixed
+    // arc is close enough to a straight line over a bolt's flight time to be
+    // led exactly, and the sign was previously rolled once at spawn and kept
+    // for the ship's whole life.
+    if (Math.random() < 0.35) ai.sign = -(ai.sign || 1);
+  }
+  // Only the part of the jink across the shooter's line of sight does anything:
+  // movement along it changes the range, which a lead solution does not care
+  // about. A plain random axis spends most of itself that way, which is why the
+  // first version of this barely moved the orbit case — 98% of shots to 88%.
+  const from = ship.lastHitBy && !ship.lastHitBy.dead ? ship.lastHitBy : ship.target;
+  vcopy(_evade, ai.jinkAxis);
+  if (from) {
+    vnorm(_los, vsub(_los, ship.pos, from.pos));
+    vaddScaled(_evade, _evade, _los, -vdot(_evade, _los));
+    if (vlen2(_evade) < 1e-4) return dir;          // axis was straight down it
+    vnorm(_evade, _evade);
+  }
+  vaddScaled(_evade, _evade, dir, 1 / 0.75);       // dir plus 0.75 of the jink
+  return vnorm(_evade, _evade);
+}
 
 function findPrey(ship, world, truce = false) {
   let best = null, bestD = Infinity;
@@ -127,7 +172,7 @@ function combat(ship, world, dt, control, fleeAt) {
     chatter(world, ship, ship.faction === 'pirate' ? 'pirateFlee' : 'traderFlee');
     vsub(_dir, ship.pos, t.pos);
     vnorm(_dir, _dir);
-    steer(ship, _dir, control, 1.6);
+    steer(ship, jink(ship, world, dt, _dir), control, 1.6);
     control.throttle = 1;
     // A truce keeps them running until it lapses. Otherwise a hull that has
     // actually recovered turns around — but a badly hurt one commits to leaving
@@ -153,7 +198,7 @@ function combat(ship, world, dt, control, fleeAt) {
     vaddScaled(_dir, _dir, _tmp, (ai.sign || 1) * 0.85);
     vnorm(_dir, _dir);
   }
-  steer(ship, _dir, control, 2.0);
+  steer(ship, jink(ship, world, dt, _dir), control, 2.0);
   control.throttle = dist > orbit ? 1 : clamp(0.15 + (dist / orbit) * 0.6, 0, 1);
 
   vnorm(_lead, vsub(_lead, t.pos, ship.pos));

@@ -340,7 +340,14 @@ export class World {
     for (const [id, q] of [[pick(['iron', 'silicon', 'gold']), randi(14) + 2], ['contraband', randi(6)]]) {
       if (q > 0) addCargo(s, id, q);
     }
-    s.ai = { role: 'pirate', state: 'hunt', t: 0, orbit: rand(420, 220), sign: Math.random() < 0.5 ? 1 : -1 };
+    s.ai = {
+      role: 'pirate', state: 'hunt', t: 0,
+      orbit: rand(420, 220), sign: Math.random() < 0.5 ? 1 : -1,
+      // Tier 0 pirates fly straight and take their beating, so the first hour
+      // stays a place you can learn to shoot in. From tier 1 they jink once
+      // you start landing rounds.
+      evade: tier >= 1,
+    };
     this.ships.push(s);
     return s;
   }
@@ -380,7 +387,11 @@ export class World {
       loadout: { hardpoints: ['rail', 'auto2', 'auto2'], utility: ['shield2', 'thruster', null] },
       name: 'HALCYON PATROL',
     });
-    s.ai = { role: 'security', state: 'hunt', t: 0, orbit: rand(520, 300), sign: Math.random() < 0.5 ? 1 : -1 };
+    s.ai = {
+      role: 'security', state: 'hunt', t: 0,
+      orbit: rand(520, 300), sign: Math.random() < 0.5 ? 1 : -1,
+      evade: true,                      // the law flies properly
+    };
     this.ships.push(s);
     this.log('HALCYON PATROL RESPONDING TO YOUR SIGNAL', 'danger');
     return s;
