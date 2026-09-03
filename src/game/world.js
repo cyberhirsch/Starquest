@@ -20,6 +20,14 @@ export const SECTOR_R = 5200;
 /** How far back the death screen looks when working out what killed you. */
 const DAMAGE_WINDOW = 25;
 
+/**
+ * Seconds of quiet earned by emptying the sector of pirates — two to three
+ * minutes, rolled so it is a rest rather than a number you can count down to.
+ * The floor is exact: an earned break that sometimes comes up short of what it
+ * promises is worse than a shorter one that always holds.
+ */
+const CLEARED_QUIET = [120, 180];
+
 class Grid {
   constructor(cell) { this.cell = cell; this.map = new Map(); }
   key(x, y, z) {
@@ -930,8 +938,19 @@ export class World {
     const pirates = this.ships.filter((s) => s.faction === 'pirate' && !s.dead).length;
     const want = this.grace > 0 ? 0
       : Math.round((2 + Math.floor(this.player.threat)) * (this.sector?.pirates ?? 1));
+
+    // Clearing the belt buys a real rest. Fighting to the last hull only to have
+    // the next one arrive twenty seconds later means the work never counted for
+    // anything — there was no state you could reach where the sector was yours.
+    // Now emptying it is a thing you can achieve, and it holds for a few minutes.
+    if (pirates === 0 && (this._pirates ?? 0) > 0 && this.grace <= 0) {
+      this.spawnTimer = Math.max(this.spawnTimer, rand(CLEARED_QUIET[1], CLEARED_QUIET[0]));
+      this.log('BELT IS CLEAR — NOTHING HOSTILE ON THE SCOPE', 'good');
+    }
+    this._pirates = pirates;
+
     if (this.spawnTimer <= 0) {
-      this.spawnTimer = rand(26, 14);
+      this.spawnTimer = rand(45, 25);
       // early on they always arrive from a distance, so you see them coming
       if (pirates < want) this.spawnPirate(this.player.threat < 1 ? true : Math.random() < 0.5);
     }

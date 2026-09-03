@@ -709,6 +709,36 @@ section('LEGIBILITY');
       : `still at ${vlen3(bolter.pos).toFixed(0)} m after 40 s`);
 }
 
+/* --------------------------------------------------------------- pacing */
+section('DIRECTOR');
+{
+  // Clearing the belt used to buy about twenty seconds: the director only knew
+  // how many pirates it wanted, not that you had just earned an empty sector,
+  // so there was no state you could reach where the work counted for anything.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  w.grace = 0;
+  w.log = () => {};
+  w.director(0.1);                       // the director sees a live pirate...
+  for (const s of w.ships) if (s.faction === 'pirate') s.dead = true;
+  w.ships = w.ships.filter((s) => !s.dead);   // ...and now you have killed it
+
+  const alive = () => w.ships.filter((s) => s.faction === 'pirate' && !s.dead).length;
+  let back = null;
+  for (let i = 1; i <= 60 * 300 && back === null; i++) {
+    w.update(1 / 60);
+    if (alive() > 0) back = i / 60;
+  }
+  ok('clearing the belt buys two minutes of quiet', back !== null && back >= 120,
+    back === null ? 'nothing came back in 5 min' : `${back.toFixed(0)} s before the next one`);
+  ok('but not five', back !== null && back < 240,
+    back === null ? 'the belt stayed empty' : `${back.toFixed(0)} s`);
+
+  for (let i = 0; i < 60 * 120; i++) w.update(1 / 60);
+  ok('and the belt fills back to quota', alive() >= 2, `${alive()} on the scope two minutes later`);
+}
+
 /* ------------------------------------------------------------ simulation */
 section('SOAK');
 {

@@ -165,7 +165,9 @@ activity, and the belt chatters over the open channel while you fly.
   A hull shot below a third loses drive power with it, so a fight you are winning
   ends in a catch instead of a stern chase. One that breaks off badly hurt commits
   to leaving rather than circling back, and if it reaches the buoys still running
-  it is gone for good — chase it down or let it go. Shoot a licensed hull and the
+  it is gone for good — chase it down or let it go. Clear every pirate out of the
+  sector and it stays clear for two to three minutes: long enough to mine, scoop
+  and sell without looking over your shoulder. Shoot a licensed hull and the
   Authority prices your head; kill a pirate and you are paid a bounty.
 - **Read the fight.** Anything that can hurt you is drawn red — your own fire
   keeps its colour and neutral traffic is dim. The name of whoever is shooting
