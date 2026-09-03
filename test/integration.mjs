@@ -709,6 +709,92 @@ section('LEGIBILITY');
       : `still at ${vlen3(bolter.pos).toFixed(0)} m after 40 s`);
 }
 
+/* ------------------------------------------------------------- the depot */
+section('THE DEPOT');
+{
+  // The depot used to be scenery. Rounds went straight through it, hulls flew
+  // through the middle of it, and shooting it cost nothing and said nothing.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  w.grace = 9999;
+  const said = [];
+  w.log = (m, k) => said.push(`${k}:${m}`);
+  const me = w.player.ship, st = w.station;
+  const R = st.radius * st.scale;
+
+  // a round fired into it stops there
+  me.pos = v3(st.pos[0], st.pos[1], st.pos[2] + 400); me.vel = v3(0, 0, 0);
+  const dir = vnorm(v3(), vsub(v3(), st.pos, me.pos));
+  qlook(me.quat, dir);
+  const gun = me.hardpoints.find((h) => MODULES[h.moduleId] && !MODULES[h.moduleId].beam);
+  me.energy = me.stats.energyMax; gun.cd = 0;
+  fireMount(me, gun, dir, w, null, 1 / 60);
+  for (let i = 0; i < 60 * 3; i++) w.update(1 / 60);
+  ok('rounds do not pass through the depot',
+    !w.projectiles.some((p) => vdist(p.pos, st.pos) < R), `${w.projectiles.length} still in flight`);
+
+  // and a hull cannot fly through the middle of it
+  me.pos = v3(st.pos[0], st.pos[1], st.pos[2] + R + 30);
+  me.vel = v3(0, 0, -120);
+  for (let i = 0; i < 60 * 3; i++) w.update(1 / 60);
+  ok('and hulls bounce off it instead of through it', vdist(me.pos, st.pos) >= R - 1,
+    `${vdist(me.pos, st.pos).toFixed(0)} m from centre, hull surface at ${R.toFixed(0)} m`);
+
+  // shooting it is noticed and costs you
+  const wanted0 = w.player.wanted;
+  me.pos = v3(st.pos[0], st.pos[1], st.pos[2] + 400); me.vel = v3(0, 0, 0);
+  qlook(me.quat, dir);
+  for (let i = 0; i < 60 * 12; i++) {
+    me.energy = me.stats.energyMax;
+    fireMount(me, gun, dir, w, null, 1 / 60);
+    w.update(1 / 60);
+  }
+  ok('shooting the depot costs you', w.player.wanted > wanted0,
+    `bounty +${w.player.wanted - wanted0}`);
+  ok('and they say so', said.some((l) => /CHECK YOUR FIRE/.test(l)));
+  ok('and eventually shut the bay', st.market.banUntil > w.time,
+    st.market.banUntil ? `${(st.market.banUntil - w.time).toFixed(0)}s to go` : 'never banned');
+
+  // The ban has to outlive the station object, or you dodge it by jumping out
+  // and straight back — generate() builds a fresh station every time.
+  const left = st.market.banUntil;
+  w.jumpTo('cinder');
+  w.jumpTo('halcyon');
+  ok('and the ban survives a round trip through the gate',
+    w.station.market.banUntil === left, `${(w.station.market.banUntil - w.time).toFixed(0)}s still to go`);
+
+  // A turret round straying into it is not a crime — you did not aim it.
+  const st2 = new World(new Player());
+  st2.player.buildShip(st2); st2.generate(); st2.log = () => {};
+  const before = st2.player.wanted;
+  st2.hitStructure(st2.station, v3(...st2.station.pos),
+    { owner: st2.player.ship, manual: false });
+  ok('a turret stray is not a crime', st2.player.wanted === before);
+}
+{
+  // Making the station solid must not wall the player out of the two things
+  // that need you to get close to something.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  const me = w.player.ship, st = w.station;
+  me.pos = v3(st.pos[0], st.pos[1], st.pos[2] + st.radius * st.scale + 40);
+  me.vel = v3(0, 0, 0);
+  for (let i = 0; i < 60; i++) w.update(1 / 60);
+  ok('you can still get close enough to dock',
+    vdist(me.pos, st.pos) <= st.dockRadius + st.radius * st.scale,
+    `${vdist(me.pos, st.pos).toFixed(0)} m, limit ${(st.dockRadius + st.radius * st.scale).toFixed(0)} m`);
+
+  // Gates are rings you fly through, so they are deliberately not solid: the
+  // jump triggers within 62 m and a solid gate stops a Bastion at 59 m.
+  const g = w.gates[0];
+  me.pos = v3(...g.pos); me.vel = v3(0, 0, 0);
+  for (let i = 0; i < 60; i++) w.update(1 / 60);
+  ok('and gates never push you out of your own jump trigger',
+    vdist(me.pos, g.pos) < 62, `${vdist(me.pos, g.pos).toFixed(0)} m from the gate`);
+}
+
 /* -------------------------------------------------------------- evasion */
 section('EVASION');
 {

@@ -185,7 +185,11 @@ activity, and the belt chatters over the open channel while you fly.
   them. Carry a breaching rig, match velocity, and cut your way in — three clean
   charges strips the hold and files a claim on the hull worth half price at the yard.
 - **Trade.** Halcyon Depot buys ore, sells hulls, modules and services. Prices drift
-  every time you dock.
+  every time you dock. It is a solid object, not scenery — rounds stop on it, hulls
+  bounce off it, and putting fire into the place that sells you fuel costs you
+  bounty and a warning over the radio. Keep at it and they shut the bay for a
+  minute and a half, and jumping out and back does not clear it. Your turrets are
+  not your fault; your own trigger is.
 - **Grow.** A Vex Shuttle has one mount. A Bastion has six. Auto-turrets acquire,
   lead and fire on their own while you fly — the only way a big hull earns its price.
 

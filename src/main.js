@@ -151,6 +151,10 @@ async function start() {
     const limit = st.dockRadius + st.radius * st.scale;
     if (d > limit) return null;
     if (vlen(player.ship.vel) > 90) return 'SLOW DOWN TO DOCK';
+    // Shoot the place up enough and they shut the bay on you for a while.
+    if (st.market.banUntil > world.time) {
+      return `DOCKING REFUSED — ${Math.ceil(st.market.banUntil - world.time)}s`;
+    }
     return 'DOCK';
   }
 

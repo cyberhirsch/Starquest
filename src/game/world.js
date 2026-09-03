@@ -28,6 +28,16 @@ const DAMAGE_WINDOW = 25;
  */
 const CLEARED_QUIET = [120, 180];
 
+/**
+ * Shooting the depot. Charged per STATION_TICK seconds of fire rather than per
+ * round, so the penalty is for the act and not for your rate of fire; after
+ * STATION_PATIENCE of those they shut the bay for STATION_BAN seconds.
+ */
+const STATION_TICK = 0.5;
+const STATION_FINE = 90;
+const STATION_PATIENCE = 12;         // six seconds of sustained fire
+const STATION_BAN = 90;
+
 class Grid {
   constructor(cell) { this.cell = cell; this.map = new Map(); }
   key(x, y, z) {
@@ -197,6 +207,7 @@ export class World {
     const def = sectorOf(sectorId);
     this.sector = def;
     this.asteroidTarget = def.asteroids;
+    this._structureList = null;       // a new station and new gates
 
     const st = def.station;
     this.station = {
@@ -233,6 +244,7 @@ export class World {
     this.rings.length = 0;
     this.beams.length = 0;
     this.grace = 45;
+    this._structureList = null;      // rebuilt for the new sector's station and gates
   }
 
   /** Move everything player-side to a new sector and rebuild around it. */
@@ -826,9 +838,20 @@ export class World {
           if (t >= 0) { hit = a; hitPoint = vaddScaled(v3(), _a, vsub(_b, p.pos, _a), t); break; }
         }
       }
+      // Structures. Rounds used to pass straight through the depot and the
+      // gates: only ships and rocks were ever tested, so the one permanent
+      // object in the sector was scenery you could shoot through.
+      if (!hit) {
+        for (const o of this._structures()) {
+          const t = segSphere(_a, p.pos, o.pos, o.radius * o.scale);
+          if (t >= 0) { hit = o; hitPoint = vaddScaled(v3(), _a, vsub(_b, p.pos, _a), t); break; }
+        }
+      }
 
       if (hit) {
-        if (hit.kind === 'ship') {
+        if (hit.kind === 'station') {
+          this.hitStructure(hit, hitPoint, p);
+        } else if (hit.kind === 'ship') {
           damageShip(hit, p.dmg, this, {
             from: p.owner, point: hitPoint, ion: p.ion, manual: p.manual });
           if (hit.faction !== 'pirate' && p.owner === this.player.ship) this.provoke(hit);
@@ -913,6 +936,56 @@ export class World {
     }
   }
 
+  /**
+   * The solid objects in a sector — the station, and nothing else.
+   *
+   * Gates are deliberately excluded. A gate is a ring you fly through, so a
+   * sphere around it is the wrong shape: it would mean bouncing off the hole.
+   * It also very nearly locked the player out of the sector — the jump triggers
+   * within 62 m of the gate's centre, and a solid gate stops a Bastion at 59 m.
+   * That happens to fit today, but a three-metre margin between "jump" and
+   * "cannot leave, and nothing on screen says why" is not a margin.
+   *
+   * Cached rather than rebuilt: walked per projectile and per ship every frame.
+   */
+  _structures() {
+    if (this._structureList) return this._structureList;
+    this._structureList = this.station ? [this.station] : [];
+    return this._structureList;
+  }
+
+  /**
+   * A round hit the depot or a gate. There is nothing to destroy — a station is
+   * not a health bar — but it is noticed, and the Authority has a long memory
+   * for people who shoot at the place that sells them fuel.
+   */
+  hitStructure(o, point, p) {
+    this.sparks(point, 4, 2.6);
+    if (p.owner !== this.player.ship || !p.manual) return;   // a turret stray is not a crime
+
+    // Charged per half-second of shooting at them, not per round: a burst
+    // repeater puts ten times the rounds downrange as a pulse cannon for the
+    // same act, and the crime is firing on the depot, not the calibre.
+    if (this.time - (o.struckAt ?? -99) < STATION_TICK) return;
+    o.struckAt = this.time;
+    o.struck = (o.struck || 0) + 1;
+    this.player.wanted += STATION_FINE;
+    if (this.time - (this._structWarn ?? -99) < 4) return;
+    this._structWarn = this.time;
+
+    if (o.struck < STATION_PATIENCE) {
+      this.log(`${o.name}: CHECK YOUR FIRE — YOU ARE SHOOTING AT US`, 'warn');
+    } else {
+      // On the market, not the station: generate() rebuilds the station object,
+      // so a ban stored there evaporated the moment you jumped out and back —
+      // a rule you can dodge in thirty seconds is decoration. `markets` is
+      // keyed by station id and kept between visits, which is the lifetime
+      // this actually wants.
+      o.market.banUntil = this.time + STATION_BAN;
+      this.log(`${o.name}: DOCKING REFUSED. COOL OFF.`, 'danger');
+    }
+  }
+
   /** Hulls bounce off rocks (and each other) and take the bruise. */
   collideShips(dt) {
     for (const s of this.ships) {
@@ -938,6 +1011,26 @@ export class World {
           }
         }
         vaddScaled(a.vel, a.vel, _a, -8 * dt * (s.cls.mass / a.size));
+      }
+
+      // The depot and the gates are solid as well. Flying through the middle of
+      // the station undercut the one landmark the sector has.
+      for (const o of this._structures()) {
+        const min = sr + o.radius * o.scale;
+        const d2 = vdist2(s.pos, o.pos);
+        if (d2 > min * min) continue;
+        const d = Math.max(Math.sqrt(d2), 1e-3);
+        vsub(_a, s.pos, o.pos);
+        vscale(_a, _a, 1 / d);
+        vaddScaled(s.pos, s.pos, _a, min - d);
+        const vn = vdot(s.vel, _a);
+        if (vn >= 0) continue;
+        vaddScaled(s.vel, s.vel, _a, -vn * 1.4);
+        const impact = Math.abs(vn);
+        if (impact > 34) {
+          damageShip(s, impact * 0.22, this, { point: s.pos, cause: 'collision' });
+          this.sparks(s.pos, 5, 3);
+        }
       }
     }
   }
