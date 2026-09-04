@@ -116,6 +116,12 @@ The point is that the belt you learned to survive stays survivable. Getting
 better and buying a bigger hull is supposed to make you stronger where you are —
 if the sector answers by getting stronger too, the upgrade bought you nothing.
 
+Nothing stops you leaving. The belt is about five kilometres across, and past the
+buoys there is no wall and no warning — you can point the nose at the dark and
+fly until you get bored. It is honest about what is out there: no traffic, no
+ambushes, nothing to find. Just the sector's own stars, and the belt getting
+small behind you.
+
 ## Two sectors
 
 **Halcyon Belt** is licensed, patrolled and rich in rock. **Cinder Reach** through the

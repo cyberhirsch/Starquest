@@ -861,6 +861,69 @@ section('EVASION');
     `${(rough * 100).toFixed(0)}% in Cinder`);
 }
 
+/* --------------------------------------------------------------- the void */
+section('OPEN SPACE');
+{
+  // The belt had a wall: a wireframe grid, a "NAV BUOY LIMIT" nag, and an
+  // inward pull that stalled any hull about 300 m past 5.2 km. Nothing in the
+  // fiction asked for it — it is open space, not an arena.
+  //
+  // Nobody shoots at this one. The question is whether the sector lets you
+  // leave, and a pilot who flies in a straight line for three minutes without
+  // ever firing back is one the belt kills often enough to drown the answer —
+  // which is correct behaviour, and a different fact.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  w.grace = 1e9;
+  w.log = () => {};
+  for (const s of [...w.ships]) if (s.faction === 'pirate') w.ships.splice(w.ships.indexOf(s), 1);
+  const me = w.player.ship;
+  me.pos = v3(600, 0, 400); me.vel = v3(0, 0, 0);
+  for (let i = 0; i < 60 * 180; i++) {
+    qlook(me.quat, v3(1, 0, 0));
+    flyShip(me, { pitch: 0, yaw: 0, roll: 0, throttle: 1 }, 1 / 60);
+    w.update(1 / 60);
+  }
+  const out = vlen3(me.pos);
+  ok('you can fly out as far as you like', out > SECTOR_R * 4,
+    `${(out / 1000).toFixed(0)} km out, sector radius ${(SECTOR_R / 1000).toFixed(1)} km`);
+  ok('under power the whole way, not adrift', vlen3(me.vel) > me.stats.maxSpeed * 0.95 && !me.dead,
+    `${vlen3(me.vel).toFixed(0)} of ${me.stats.maxSpeed.toFixed(0)} m/s`);
+
+  // The sector's own traffic still stays in the sector, or there would be
+  // nothing left to trade with by the time you came back.
+  const stray = w.ships.find((s) => s.ai && s.faction !== 'player');
+  ok('but the locals stay home', !stray || vlen3(stray.pos) < SECTOR_R * 1.3,
+    stray ? `nearest local ${(vlen3(stray.pos) / 1000).toFixed(1)} km from centre` : 'none left');
+
+  // ...and you can always find your way back.
+  ok('and home is still on the instruments', !!w.station && vlen3(w.station.pos) < SECTOR_R);
+}
+{
+  // Out in the dark the director has to stay quiet. Left alone it places
+  // pirates a few km off the player wherever the player happens to be, which
+  // would have meant flying out to look at the stars and being ambushed by a
+  // belt that is nowhere near you.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  w.grace = 0;
+  w.log = () => {};
+  const me = w.player.ship;
+  me.pos = v3(SECTOR_R * 3, 0, 0); me.vel = v3(0, 0, 0);
+  qlook(me.quat, v3(1, 0, 0));
+  let nearby = 0;
+  for (let i = 0; i < 60 * 300; i++) {
+    flyShip(me, { pitch: 0, yaw: 0, roll: 0, throttle: 1 }, 1 / 60);
+    w.update(1 / 60);
+    nearby = Math.max(nearby, w.ships.filter((s) => s.faction === 'pirate'
+      && !s.dead && vdist(s.pos, me.pos) < 4000).length);
+  }
+  ok('and there is nothing out there', nearby === 0,
+    `${nearby} pirates found you ${(vlen3(me.pos) / 1000).toFixed(0)} km out, over five minutes`);
+}
+
 /* ------------------------------------------------------------- regions */
 section('REGIONS');
 {

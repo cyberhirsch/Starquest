@@ -47,6 +47,11 @@ await page.goto(URL_BASE + gfx, { waitUntil: 'load' });
 await until(() => !!window.STARQUEST);
 const backend = await read(() => window.STARQUEST.renderer.backend);
 console.log(`backend: ${backend}`);
+// Headless Chromium does not composite a WebGPU canvas into page.screenshot():
+// every shot below comes out a uniform white page with the HUD missing, which
+// looks like a captured frame until you measure it. WebGL2 captures properly,
+// so that is the backend to take pictures on.
+if (backend !== 'webgl2') console.log('note: screenshots will be blank — rerun with GFX=webgl to capture frames');
 
 check('touch controls appear on a touch device', await page.locator('#throttleBar').isVisible());
 check('fire button appears', await page.locator('#fireBtn').isVisible());
@@ -164,6 +169,20 @@ await page.screenshot({ path: 'docs/shot-comms.png' });
 await page.locator('#commsOpts [data-do-comms="close"]').click();
 check('the channel closes', await until(() => document.getElementById('comms').classList.contains('hidden')));
 
+// --- open space --------------------------------------------------------------
+await read(() => {
+  const g = window.STARQUEST;
+  const s = g.player.ship;
+  s.pos = [26000, 900, 14000];          // far outside the belt
+  s.vel = [0, 0, 0];
+  g.qlookAt(s.quat, [-0.88, -0.03, -0.47]);   // looking back toward the belt
+});
+await page.waitForTimeout(1400);
+const far = await read(() => Math.hypot(...window.STARQUEST.player.ship.pos));
+check('you can be far outside the belt', far > 25000, `${(far / 1000).toFixed(0)} km out`);
+await page.screenshot({ path: 'docs/shot-deep.png' });
+await read(() => { window.STARQUEST.player.ship.pos = [0, 0, -900]; });
+
 // --- a sector should look like a place ---------------------------------------
 await read(() => {
   const g = window.STARQUEST;
@@ -201,8 +220,15 @@ await read(() => window.STARQUEST.world.jumpTo('halcyon'));
 // --- combat legibility -------------------------------------------------------
 await read(() => {
   const g = window.STARQUEST;
-  const foe = g.world.ships.find((s) => s.name === 'BLACK KESTREL');
-  g.damageShip(g.player.ship, 60, g.world, { from: foe, manual: true });
+  // Spawn the attacker here rather than reusing the one from the comms check:
+  // the sector-look block above jumps to Cinder and back, and jumpTo clears
+  // every ship that is not yours, so that one no longer exists.
+  const foe = g.world.spawnPirate();
+  foe.name = 'BLACK KESTREL';
+  const p = g.player.ship;
+  foe.pos[0] = p.pos[0] + 400; foe.pos[1] = p.pos[1]; foe.pos[2] = p.pos[2] + 400;
+  g.player.target = foe;
+  g.damageShip(p, 60, g.world, { from: foe, manual: true });
 });
 check('the threat tag names who is shooting you',
   await until(() => !document.getElementById('threat').classList.contains('hidden')),

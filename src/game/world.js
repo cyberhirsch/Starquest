@@ -791,7 +791,17 @@ export class World {
     this.director(dt);
   }
 
+  /**
+   * Keeps the sector's own traffic in the sector. The player is exempt: there is
+   * nothing out there and nothing stopping you going to look at it.
+   *
+   * This used to pull the player back too, with a wireframe wall and a "NAV BUOY
+   * LIMIT" nag, which is a rule the fiction never asked for — the belt is open
+   * space, not an arena. Everyone else stays because a sector that empties
+   * itself has no traffic to trade with, rob or be robbed by.
+   */
   confine(s, dt) {
+    if (s === this.player.ship) return;
     const d2 = vlen2(s.pos);
     if (d2 <= SECTOR_R * SECTOR_R) return;
     const d = Math.sqrt(d2);
@@ -820,10 +830,6 @@ export class World {
     } else s.outbound = 0;
     const pull = (d - SECTOR_R) * 0.6;
     vaddScaled(s.vel, s.vel, _a, -pull * dt);
-    if (s === this.player.ship && this.time - (this._edgeWarn || -99) > 6) {
-      this._edgeWarn = this.time;
-      this.log('NAV BUOY LIMIT — TURN BACK', 'warn');
-    }
   }
 
   updateProjectiles(dt) {
@@ -1064,6 +1070,11 @@ export class World {
       this.log('BELT IS CLEAR — NOTHING HOSTILE ON THE SCOPE', 'good');
     }
     this._pirates = pirates;
+
+    // Out past the belt there is nothing, and nothing arrives to keep you
+    // company. Without this the director would keep placing pirates beside a
+    // player who had flown into empty space to look at the stars.
+    if (vlen2(this.player.ship.pos) > (SECTOR_R * 1.4) ** 2) { this.spawnTimer = 8; return; }
 
     if (this.spawnTimer <= 0) {
       this.spawnTimer = rand(45, 25);

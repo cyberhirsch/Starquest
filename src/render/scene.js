@@ -1,13 +1,12 @@
 // Turns the world into line segments.
 
 import {
-  v3, vcopy, vset, vadd, vsub, vscale, vaddScaled, vdot, vlen, vnorm, vdist, vdist2,
+  v3, vcopy, vset, vadd, vsub, vscale, vaddScaled, vnorm, vdist, vdist2,
   qforward, qright, qup, qrot, clamp, lerp, vrandSphere,
 } from '../core/math.js';
 import { C, ORE_COLORS } from './palette.js';
 import { MODELS } from './models.js';
 import { MODULES } from '../game/data.js';
-import { SECTOR_R } from '../game/world.js';
 
 let DRAW_DIST = 4200;
 let STAR_STEP = 1;
@@ -88,10 +87,6 @@ export function drawScene(batch, world, cam, opts = {}) {
   const eye = cam.pos;
   drawSky(batch, eye, world.time, world.sector);
 
-  // sector boundary — a grid you only see as you near it
-  const distOut = vlen(eye);
-  if (distOut > SECTOR_R * 0.72) drawBoundary(batch, eye, distOut, world.time);
-
   if (world.station) drawStation(batch, world.station, eye);
   for (const g of world.gates || []) drawGate(batch, g, eye, world.time);
 
@@ -130,32 +125,6 @@ function drawSky(batch, eye, time, sector) {
     batch.mesh(MODELS.planet, sky.planet.pos, [0, 0, 0, 1], sky.planet.r,
       sky.planet.colour, 1.2, 0.5, 0.7);
   }
-}
-
-function drawBoundary(batch, eye, dist, time) {
-  const t = clamp((dist - SECTOR_R * 0.72) / (SECTOR_R * 0.3), 0, 1);
-  const alpha = t * 0.55;
-  vnorm(_a, eye);
-  vscale(_a, _a, SECTOR_R);                       // nearest point on the shell
-  // local tangent frame
-  vnorm(_b, _a);
-  vset(_c, 0, 1, 0);
-  if (Math.abs(vdot(_b, _c)) > 0.9) vset(_c, 1, 0, 0);
-  const right = vnorm(v3(), crossv(_c, _b));
-  const up = vnorm(v3(), crossv(_b, right));
-  const step = 260, n = 6;
-  for (let i = -n; i <= n; i++) {
-    for (const [ax, bx] of [[right, up], [up, right]]) {
-      vaddScaled(_d, _a, ax, i * step);
-      vaddScaled(_e, _d, bx, -n * step);
-      vaddScaled(_f, _d, bx, n * step);
-      batch.line3v(_e, _f, C.grid, 1.2, alpha * (1 - Math.abs(i) / (n + 2)), 0.8);
-    }
-  }
-}
-
-function crossv(a, b) {
-  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
 function drawStation(batch, st, eye) {

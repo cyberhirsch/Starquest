@@ -111,14 +111,24 @@ export const qforward = (o, q) => qrot(o, q, vset(_ax, 0, 0, -1));
 export const qright = (o, q) => qrot(o, q, vset(_ax, 1, 0, 0));
 export const qup = (o, q) => qrot(o, q, vset(_ax, 0, 1, 0));
 
-/** Orientation looking down `dir` with roll minimised against `up`. */
+/**
+ * Orientation looking down `dir` with roll minimised against `up`.
+ *
+ * The two crosses have to be in this order. Written the other way round —
+ * right = up x forward, up = forward x right — they build a mirrored,
+ * left-handed basis, and the matrix below is then a reflection rather than a
+ * rotation. The trace branch of the conversion silently returns the identity
+ * for most of those, so qlook(q, dir) would quietly leave the hull pointing
+ * down -Z whatever direction you asked for, and only look correct when you
+ * happened to ask for -Z.
+ */
 const _f = v3(), _r = v3(), _u = v3();
 export const qlook = (o, dir, up = [0, 1, 0]) => {
   vnorm(_f, dir);
-  vcross(_r, up, _f);
-  if (vlen2(_r) < 1e-8) { vcross(_r, [0, 0, 1], _f); }
+  vcross(_r, _f, up);
+  if (vlen2(_r) < 1e-8) { vcross(_r, _f, [0, 0, 1]); }
   vnorm(_r, _r);
-  vcross(_u, _f, _r);
+  vcross(_u, _r, _f);
   // Build quaternion from basis (right, up, -forward => matrix columns)
   const m00 = _r[0], m01 = _u[0], m02 = -_f[0];
   const m10 = _r[1], m11 = _u[1], m12 = -_f[1];
