@@ -19,17 +19,53 @@ export function setQuality(q) {
 }
 const _a = v3(), _b = v3(), _c = v3(), _d = v3(), _e = v3(), _f = v3();
 
-const STARS = (() => {
-  const out = [];
-  for (let i = 0; i < 420; i++) {
-    const d = vrandSphere(v3(), 1);
-    out.push({ d, b: 0.25 + Math.random() * 0.9, tw: Math.random() * 6.28 });
-  }
-  return out;
-})();
+/**
+ * Skies are built per sector from the seed in its definition, and cached.
+ *
+ * They used to be one module-level constant built with Math.random, which meant
+ * both sectors shared a sky AND it was a different sky every time the game
+ * launched. A belt you fly back to should look like the belt you left, and it
+ * should not look like the other one.
+ */
+const SKIES = new Map();
 
-const SUN_DIR = vnorm(v3(), [0.42, 0.28, 0.86]);
-const PLANET = { pos: v3(-9000, -1800, 11000), r: 3100 };
+const DEFAULT_SKY = {
+  seed: 1, stars: 420, tint: [0.72, 0.86, 1.00],
+  sun: { dir: [0.42, 0.28, 0.86], colour: [1, 0.95, 0.8], rays: 8, len: 260 },
+  planet: { pos: [-9000, -1800, 11000], r: 3100, colour: [0.35, 0.45, 0.85] },
+};
+
+/** Deterministic PRNG, same shape as the one models.js uses for asteroids. */
+function skyRng(seed) {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+}
+
+export function skyFor(sector) {
+  const def = { ...DEFAULT_SKY, ...(sector?.sky || {}) };
+  const key = sector?.id || 'default';
+  const cached = SKIES.get(key);
+  if (cached) return cached;
+  const rnd = skyRng(def.seed);
+  const stars = [];
+  for (let i = 0; i < def.stars; i++) {
+    // a sphere point from the seeded stream, so the field is reproducible
+    const z = rnd() * 2 - 1;
+    const a = rnd() * Math.PI * 2;
+    const r = Math.sqrt(Math.max(0, 1 - z * z));
+    stars.push({
+      d: v3(Math.cos(a) * r, z, Math.sin(a) * r),
+      b: 0.25 + rnd() * 0.9,
+      tw: rnd() * 6.28,
+    });
+  }
+  const sky = { ...def, starList: stars };
+  SKIES.set(key, sky);
+  return sky;
+}
 
 export function factionColor(ship) {
   switch (ship.faction) {
@@ -50,7 +86,7 @@ function fade(d, near = 1800, far = DRAW_DIST) {
 
 export function drawScene(batch, world, cam, opts = {}) {
   const eye = cam.pos;
-  drawSky(batch, eye, world.time);
+  drawSky(batch, eye, world.time, world.sector);
 
   // sector boundary — a grid you only see as you near it
   const distOut = vlen(eye);
@@ -70,24 +106,30 @@ export function drawScene(batch, world, cam, opts = {}) {
   drawParticles(batch, world, cam, eye);
 }
 
-function drawSky(batch, eye, time) {
+function drawSky(batch, eye, time, sector) {
   const R = 9000;
-  for (let i = 0; i < STARS.length; i += STAR_STEP) {
-    const s = STARS[i];
+  const sky = skyFor(sector);
+  const list = sky.starList;
+  for (let i = 0; i < list.length; i += STAR_STEP) {
+    const s = list[i];
     const tw = 0.75 + 0.25 * Math.sin(time * 2.1 + s.tw);
     const bx = eye[0] + s.d[0] * R, by = eye[1] + s.d[1] * R, bz = eye[2] + s.d[2] * R;
     const l = R * 0.0040 * (0.6 + s.b * 0.5);   // ~2px on screen
-    batch.line3(bx, by, bz, bx + l, by + l * 0.4, bz, C.star, 1.1, s.b * tw * 0.75, 0.9);
+    batch.line3(bx, by, bz, bx + l, by + l * 0.4, bz, sky.tint, 1.1, s.b * tw * 0.75, 0.9);
   }
   // sun: a hard starburst
-  const sx = eye[0] + SUN_DIR[0] * R, sy = eye[1] + SUN_DIR[1] * R, sz = eye[2] + SUN_DIR[2] * R;
-  const rays = 8, len = 260;
+  const { dir, colour, rays, len } = sky.sun;
+  vnorm(_a, vset(_a, dir[0], dir[1], dir[2]));
+  const sx = eye[0] + _a[0] * R, sy = eye[1] + _a[1] * R, sz = eye[2] + _a[2] * R;
   for (let i = 0; i < rays; i++) {
     const a = (i / rays) * Math.PI * 2 + time * 0.05;
-    const ex = Math.cos(a) * len, ey = Math.sin(a) * len;
-    batch.line3(sx, sy, sz, sx + ex, sy + ey, sz, [1, 0.95, 0.8], 2.0, 0.9, 1.4);
+    batch.line3(sx, sy, sz, sx + Math.cos(a) * len, sy + Math.sin(a) * len, sz,
+      colour, 2.0, 0.9, 1.4);
   }
-  batch.mesh(MODELS.planet, PLANET.pos, [0, 0, 0, 1], PLANET.r, C.planet, 1.2, 0.5, 0.7);
+  if (sky.planet) {
+    batch.mesh(MODELS.planet, sky.planet.pos, [0, 0, 0, 1], sky.planet.r,
+      sky.planet.colour, 1.2, 0.5, 0.7);
+  }
 }
 
 function drawBoundary(batch, eye, dist, time) {
@@ -120,7 +162,8 @@ function drawStation(batch, st, eye) {
   const d = vdist(st.pos, eye);
   const a = fade(d, 6000, 9000);
   if (a <= 0) return;
-  batch.mesh(MODELS.station, st.pos, st.quat, st.scale, C.station, 1.7, a, 1.05);
+  batch.mesh(MODELS[st.def?.model] || MODELS.station, st.pos, st.quat, st.scale,
+    C.station, 1.7, a, 1.05);
   // docking mouth beacons
   qforward(_a, st.quat);
   vaddScaled(_b, st.pos, _a, st.radius * st.scale * 0.92);

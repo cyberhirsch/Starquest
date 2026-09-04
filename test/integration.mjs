@@ -864,6 +864,23 @@ section('EVASION');
 /* ------------------------------------------------------------- regions */
 section('REGIONS');
 {
+  // A place has to look like itself. The sky used to be one module constant
+  // built with Math.random, so both sectors shared it AND it was different on
+  // every launch — a belt you flew back to was not the belt you left.
+  const { skyFor } = await import('../src/render/scene.js');
+  const a1 = skyFor(SECTORS.halcyon), a2 = skyFor(SECTORS.halcyon);
+  const b1 = skyFor(SECTORS.cinder);
+  ok('a sector\'s sky is the same sky every time', a1.starList[7].d[0] === a2.starList[7].d[0]);
+  ok('and is not the sky next door',
+    a1.starList.length !== b1.starList.length
+    && a1.starList[7].d[0] !== b1.starList[7].d[0]
+    && a1.sun.dir[0] !== b1.sun.dir[0],
+    `${a1.starList.length} stars vs ${b1.starList.length}, different sun and tint`);
+  ok('and the two stations are not the same building',
+    SECTORS.halcyon.station.model !== SECTORS.cinder.station.model,
+    `${SECTORS.halcyon.station.model} vs ${SECTORS.cinder.station.model}`);
+}
+{
   // A region has a fixed character. Difficulty used to key off a player threat
   // score, so four things stepped up on the same kill and buying the ship you
   // had saved for made the sector you were standing in measurably worse.

@@ -24,6 +24,16 @@ export const SECTORS = {
     danger: 0.35,                     // licensed space: pulse cannons and bad ideas
     damage: 0.6,                      // and the Authority's medical cover is decent
     evasive: 0.3,                     // a third of them can actually fly
+    // A region has to look like one place, and like the same place every time
+    // you come back. The seed fixes the starfield; everything else here is what
+    // makes the belt read as a different sky from the reach.
+    sky: {
+      seed: 0x5741,
+      stars: 420,
+      tint: [0.72, 0.86, 1.00],       // cold and clear
+      sun: { dir: [0.42, 0.28, 0.86], colour: [1, 0.95, 0.8], rays: 8, len: 260 },
+      planet: { pos: [-9000, -1800, 11000], r: 3100, colour: [0.35, 0.45, 0.85] },
+    },
     station: {
       id: 'depot',
       name: 'HALCYON DEPOT',
@@ -53,11 +63,21 @@ export const SECTORS = {
     danger: 1.8,                      // turrets, thrusters, and nobody coming to help
     damage: 1.0,
     evasive: 0.75,
+    // Deeper out and off the plane of the system: fewer, dimmer stars, a small
+    // red sun a long way off, and a gas giant close enough overhead to be a
+    // presence rather than scenery.
+    sky: {
+      seed: 0xC14D,
+      stars: 260,
+      tint: [0.86, 0.72, 0.66],       // dust in the light
+      sun: { dir: [-0.30, -0.12, -0.94], colour: [1, 0.55, 0.32], rays: 6, len: 150 },
+      planet: { pos: [6200, 2600, -8200], r: 4200, colour: [0.62, 0.30, 0.24] },
+    },
     station: {
       id: 'tallow',
       name: 'TALLOW YARD',
       pos: [-1100, 60, 900],
-      model: 'station',
+      model: 'yard',                  // a hulk with a dock cut into it, not a ring
       scale: 2.4,
       radius: 26,
       shipyard: false,

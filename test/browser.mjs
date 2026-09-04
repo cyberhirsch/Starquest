@@ -164,6 +164,40 @@ await page.screenshot({ path: 'docs/shot-comms.png' });
 await page.locator('#commsOpts [data-do-comms="close"]').click();
 check('the channel closes', await until(() => document.getElementById('comms').classList.contains('hidden')));
 
+// --- a sector should look like a place ---------------------------------------
+await read(() => {
+  const g = window.STARQUEST;
+  g.player.ship.pos[0] = 0; g.player.ship.pos[1] = 0; g.player.ship.pos[2] = -900;
+  g.player.ship.vel = [0, 0, 0];
+  g.world.station.pos[0] = 0; g.world.station.pos[1] = -40; g.world.station.pos[2] = -1400;
+});
+await page.waitForTimeout(1200);
+await page.screenshot({ path: 'docs/shot-halcyon.png' });
+await read(() => {
+  const g = window.STARQUEST;
+  g.world.jumpTo('cinder');
+  g.player.ship.pos[0] = g.world.station.pos[0];
+  g.player.ship.pos[1] = g.world.station.pos[1] + 40;
+  g.player.ship.pos[2] = g.world.station.pos[2] + 500;
+  g.player.ship.vel = [0, 0, 0];
+});
+await page.waitForTimeout(1500);
+check('the reach is a different sky', await read(() => window.STARQUEST.world.sector.id === 'cinder'));
+await page.screenshot({ path: 'docs/shot-cinder.png' });
+// face the yard, so its own shape is on screen rather than off to one side
+await read(() => {
+  const g = window.STARQUEST;
+  const st = g.world.station, s = g.player.ship;
+  s.pos = [st.pos[0] + 30, st.pos[1] + 60, st.pos[2] + 260];
+  s.vel = [0, 0, 0];
+  const d = [st.pos[0] - s.pos[0], st.pos[1] - s.pos[1], st.pos[2] - s.pos[2]];
+  const l = Math.hypot(...d);
+  g.qlookAt(s.quat, [d[0] / l, d[1] / l, d[2] / l]);
+});
+await page.waitForTimeout(900);
+await page.screenshot({ path: 'docs/shot-yard.png' });
+await read(() => window.STARQUEST.world.jumpTo('halcyon'));
+
 // --- combat legibility -------------------------------------------------------
 await read(() => {
   const g = window.STARQUEST;

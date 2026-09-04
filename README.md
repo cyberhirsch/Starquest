@@ -92,6 +92,14 @@ manual button).
 
 ## A region has a character
 
+Each sector has its own sky, built from a seed in its definition, so a belt looks
+the same every time you come back to it and does not look like the one next door.
+Halcyon is a dense cold starfield under a white sun with a blue world a long way
+off. Cinder is dimmer and warmer, lit by a small red sun from the wrong side of
+the system, with a gas giant close enough overhead to be a presence. The Depot is
+a maintained ring; Tallow Yard is a dead freighter with a dock cut into its flank,
+because that is what the fiction says it is.
+
 Difficulty belongs to the place, not to you. Halcyon is the same belt on your
 first flight as it is fifty kills and a Bastion later: two pirates at a time,
 pulse cannons, arriving from the sector edge where you can see them coming, and
@@ -229,7 +237,7 @@ src/
     backend.js        picks WebGPU, falls back to WebGL2
     lines.js          the line batch every system draws into
     models.js         low-poly hulls, station, asteroids, all as edge lists
-    scene.js          world -> line segments
+    scene.js          world -> line segments, and each sector's own sky
     palette.js        phosphor colours
   game/
     data.js           hulls, modules, ores, trade goods

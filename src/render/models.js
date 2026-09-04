@@ -216,6 +216,44 @@ function station() {
   return b.build();
 }
 
+/**
+ * Tallow Yard: a dead freighter with a dock cut into its flank and scaffolding
+ * bolted on. The Depot's ring says "licensed and maintained"; this has to say
+ * "somebody moved into a wreck", or the second sector is the first one with
+ * different numbers.
+ */
+function yard() {
+  const b = mb();
+  // the hull of the freighter that used to be here — a long broken box
+  const front = b.ring(-30, 9, 6, 0, 6);
+  const mid1 = b.ring(-8, 11, 8, 0, 6);
+  const mid2 = b.ring(10, 10, 7, 0, 6);
+  const stern = b.ring(26, 6, 5, 0, 6);
+  b.connect(front, mid1); b.connect(mid1, mid2); b.connect(mid2, stern);
+  // the spine is snapped: a gap and a bent strut where it gave way
+  b.chain([b.vert(0, 9, -4), b.vert(2, 15, 2), b.vert(-1, 13, 9)]);
+  // dock cut into the flank, lit and squared off — the one maintained part
+  const lip = [];
+  for (const [x, y, z] of [[-12, -2, -14], [-12, 5, -14], [-12, 5, 4], [-12, -2, 4]]) {
+    lip.push(b.vert(x, y, z));
+  }
+  b.loop(lip);
+  const deep = lip.map((_, i) => {
+    const p = [[-5, -2, -14], [-5, 5, -14], [-5, 5, 4], [-5, -2, 4]][i];
+    return b.vert(p[0], p[1], p[2]);
+  });
+  b.loop(deep); b.connect(lip, deep);
+  // scaffolding and cargo booms clamped to the outside
+  for (const [z, s] of [[-20, 1], [-2, -1], [16, 1]]) {
+    const a1 = b.vert(0, s * 11, z);
+    const a2 = b.vert(s * 6, s * 19, z + 3);
+    const a3 = b.vert(s * 14, s * 19, z - 2);
+    b.chain([a1, a2, a3]);
+    b.edge(a2, b.vert(s * 6, s * 19, z - 8));
+  }
+  return b.build();
+}
+
 /* --------------------------------------------------------- misc geometry */
 
 function icosahedron() {
@@ -338,6 +376,7 @@ export const MODELS = {
   marauder: marauder(),
   sentinel: sentinel(),
   station: station(),
+  yard: yard(),
   pod: pod(),
   gate: gate(),
   missile: missile(),

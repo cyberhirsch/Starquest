@@ -20,7 +20,7 @@ import { Boarding, boardBlocker, BOARD_RANGE, BOARD_SPEED } from './game/boardin
 import { MODULES } from './game/data.js';
 import {
   v3, m4, m4perspective, m4view, m4mul, qid, qaxis, qmul, qnorm, qcopy, qforward, qright, qup,
-  qrot, vcopy, vset, vadd, vsub, vscale, vaddScaled, vcross, vlen, vdist, vnorm, clamp, lerp, rand,
+  qrot, qlook, vcopy, vset, vadd, vsub, vscale, vaddScaled, vcross, vlen, vdist, vnorm, clamp, lerp, rand,
 } from './core/math.js';
 import { flyShip, fireMount, mountWorldPos, recalc, cargoUsed, addCargo, damageShip } from './game/ship.js';
 
@@ -591,6 +591,7 @@ async function start() {
   game.Comms = Comms;
   game.damageShip = damageShip;         // handy from the console, and from tests
   game.flyShip = flyShip;               // the player's hull is flown here, not in World
+  game.qlookAt = qlook;                 // point a hull at something, from the console
   game.classes = { Boarding };          // handy from the console
   game.batch = batch;
   window.STARQUEST = game;
