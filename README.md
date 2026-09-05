@@ -84,7 +84,13 @@ wheel trims) · mouse steers
 (click to capture the pointer; `A`/`D` and the arrows also work) · `Q`/`E` roll ·
 `Space` or click to fire · `R` pilot/gunner · `T` target · `F` dock or board ·
 `H` hail · `Tab` inventory · `1`–`6` pick which mount you are manning ·
-`G` flight assist · `M` manual.
+`G` flight assist · `M` manual · `K` skip the tutorial · `I` install to the home screen.
+
+Every button you can see while flying has a key, and wears it: the HUD row carries
+its letter above the label, and a hail is a numbered menu — `1`–`6` answer the
+channel while it is open (they go back to picking mounts when it closes) and `Esc`
+hangs up. On a touch device the key badges are hidden, because there is no keyboard
+to press.
 
 ## Getting started
 

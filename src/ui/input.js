@@ -12,6 +12,9 @@ const ONESHOT = {
   Tab: 'inventory', KeyR: 'mode', KeyF: 'action', KeyT: 'target', KeyG: 'assist',
   KeyM: 'map', KeyH: 'hail', Escape: 'escape', Enter: 'action', Digit1: 'mount1', Digit2: 'mount2',
   Digit3: 'mount3', Digit4: 'mount4', Digit5: 'mount5', Digit6: 'mount6',
+  // Everything on screen while you are flying answers to a key. These two were
+  // the last buttons that only a mouse could reach.
+  KeyK: 'skiptut', KeyI: 'install',
 };
 
 export function createInput(canvas, root) {

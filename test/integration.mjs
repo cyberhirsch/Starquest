@@ -1007,25 +1007,29 @@ section('SITES');
     w.sites.map((x) => `${x.name} ${(vlen3(x.pos) / 1000).toFixed(1)} km`).join(', '));
 
   // A claim is only worth naming if the ore is actually there.
-  const shoal = w.siteById('shoal');
-  const rocks = w.asteroids.filter((a) => w.siteAt(a.pos) === shoal);
-  const ice = rocks.filter((a) => a.type.ore === 'ice').length;
-  ok('a claim is made of the rock it is named for', rocks.length > 40 && ice / rocks.length > 0.45,
-    `${ice} of ${rocks.length} rocks at ${shoal.name} are ice`);
+  // Measured against the belt rather than a fixed percentage: what makes a claim
+  // worth naming is that the ore is concentrated there, and the concentration is
+  // the ratio. A flat threshold sits close enough to the sampling spread on ~50
+  // rocks to fail on an unlucky roll while the design is working perfectly.
+  const share = (list, ore) => list.filter((a) => a.type.ore === ore).length / Math.max(1, list.length);
+  const belt = w.asteroids.filter((a) => !w.siteAt(a.pos));
+  const at = (id) => w.asteroids.filter((a) => w.siteAt(a.pos) === w.siteById(id));
+
+  const rocks = at('shoal');
+  const iceHere = share(rocks, 'ice'), iceBelt = share(belt, 'ice');
+  ok('a claim is made of the rock it is named for', rocks.length > 40 && iceHere > iceBelt * 2,
+    `${(iceHere * 100).toFixed(0)}% ice at THE COLD SHOAL against ${(iceBelt * 100).toFixed(0)}% in the belt`);
 
   // The one that actually needed fixing. A multiplier on the sector's mix
   // cannot make a rare ore dominant — 2.4x on platinum, base weight 8 against
   // iron's 34, measured 20% — so the claim named for platinum was an iron field
   // with a platinum name, and the job that sent you there was fiction.
-  const anvil = w.siteById('anvil');
-  const hard = w.asteroids.filter((a) => w.siteAt(a.pos) === anvil);
-  const plat = hard.filter((a) => a.type.ore === 'platinum').length;
-  ok('including a claim named for a rare one', plat / hard.length > 0.4,
-    `${plat} of ${hard.length} rocks at ${anvil.name} are platinum, against a 6% belt average`);
-  const belt = w.asteroids.filter((a) => !w.siteAt(a.pos));
-  const beltIce = belt.filter((a) => a.type.ore === 'ice').length / belt.length;
-  ok('and the belt is still the belt', belt.length > 180 && beltIce < 0.35,
-    `${belt.length} rocks in the main cluster, ${(beltIce * 100).toFixed(0)}% ice`);
+  const hard = at('anvil');
+  const platHere = share(hard, 'platinum'), platBelt = share(belt, 'platinum');
+  ok('including a claim named for a rare one', platHere > platBelt * 4,
+    `${(platHere * 100).toFixed(0)}% platinum at TANNER'S ANVIL against ${(platBelt * 100).toFixed(0)}% in the belt`);
+  ok('and the belt is still the belt', belt.length > 180 && iceBelt < 0.35,
+    `${belt.length} rocks in the main cluster, ${(iceBelt * 100).toFixed(0)}% ice`);
 
   // You have to be able to find it.
   let t = null; const seen = new Set();

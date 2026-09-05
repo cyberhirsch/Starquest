@@ -196,6 +196,48 @@ await page.screenshot({ path: 'docs/shot-comms.png' });
 await page.locator('#commsOpts [data-do-comms="close"]').click();
 check('the channel closes', await until(() => document.getElementById('comms').classList.contains('hidden')));
 
+// --- everything in flight answers to a key ------------------------------------
+{
+  const unbound = await read(() => {
+    const seen = [];
+    for (const b of document.querySelectorAll('#btnRow button, #objective button, #touchUI button')) {
+      if (b.offsetParent === null) continue;                 // not on screen
+      const chord = { fireBtn: 'Space', tgtBtn: 'T' }[b.id];  // the two thumb controls
+      if (chord || b.querySelector('u')) continue;
+      seen.push(b.id || b.textContent.trim());
+    }
+    return seen;
+  });
+  check('every button in flight has a key on it', unbound.length === 0, unbound.join(', ') || 'all bound');
+
+  // A channel is a menu you read under fire, so it answers by number.
+  await read(() => {
+    const g = window.STARQUEST;
+    const foe = g.world.spawnPirate();
+    const p = g.player.ship;
+    foe.pos = [p.pos[0] + 300, p.pos[1], p.pos[2]];
+    g.player.target = foe;
+  });
+  await page.keyboard.press('KeyH');
+  check('H opens the channel', await until(() => !document.getElementById('comms').classList.contains('hidden')));
+  const numbered = await read(() => [...document.querySelectorAll('#commsOpts .hbtn u')].map((u) => u.textContent));
+  check('and every answer is numbered', numbered.length > 2 && numbered[0] === '1', numbered.join(''));
+  // Escape first, while the channel is still untouched: it has to close the
+  // conversation rather than fall through and open the flight manual.
+  await page.keyboard.press('Escape');
+  check('and Escape closes it without opening the menu',
+    await until(() => document.getElementById('comms').classList.contains('hidden')
+      && document.getElementById('overlay').textContent.trim() === ''));
+  await read(() => { const g = window.STARQUEST; g.ui.openComms(g.player.target); });
+  await page.waitForTimeout(250);
+  // stashed in the page: until() runs its predicate in the browser, not here
+  await read(() => { window.__line = document.getElementById('commsLine').textContent; });
+  await page.keyboard.press('Digit1');
+  check('a digit answers it', await until(() => document.getElementById('commsLine').textContent !== window.__line
+    || document.getElementById('comms').classList.contains('hidden')));
+  await read(() => window.STARQUEST.ui.closeComms());
+}
+
 // --- open space --------------------------------------------------------------
 await read(() => {
   const g = window.STARQUEST;

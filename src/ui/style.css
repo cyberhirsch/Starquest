@@ -173,7 +173,9 @@ body.touch #threat { font-size: 10px; max-width: 46vw; }
    Before this, the row was simply unpressable wherever the two overlapped. */
 #btnRow {
   position: absolute; right: 14px; bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap;
-  justify-content: flex-end; max-width: 40vw; z-index: 12;
+  /* Wide enough for the row to stay one line once each button carries its key
+     badge; it wraps rather than overflowing on a narrow window. */
+  justify-content: flex-end; max-width: 62vw; z-index: 12;
 }
 .hbtn {
   pointer-events: auto; font: inherit; font-size: 11px; letter-spacing: 0.1em;
@@ -183,6 +185,25 @@ body.touch #threat { font-size: 10px; max-width: 46vw; }
   transition: background 0.1s, color 0.1s;
 }
 .hbtn:hover, .hbtn:active { background: rgba(108, 255, 159, 0.18); }
+/*
+ * The key that works this button. Dim and boxed rather than underlined: the
+ * labels are already uppercase and letter-spaced, so an underlined letter in
+ * the middle of one is not findable at a glance.
+ */
+.hbtn u {
+  display: inline-block; margin-right: 7px; padding: 0 4px; text-decoration: none;
+  font-size: 10px; color: var(--amber); border: 1px solid rgba(255, 194, 60, 0.45);
+  opacity: 0.85;
+}
+/*
+ * In the HUD row the badge goes above the label rather than beside it. Inline,
+ * six of them widened the row by 150px and pushed it over the mount readout and
+ * the hull bars at 1280 and below; stacked, the row is exactly as wide as it was
+ * before the keys existed and merely a line taller, which is free space.
+ */
+#btnRow .hbtn { text-align: center; line-height: 1.15; padding-inline: 11px; }
+#btnRow .hbtn u { display: block; margin: 0 0 3px; padding: 0 2px; }
+body.touch .hbtn u { display: none; }
 .hbtn.hot { border-color: var(--amber); color: var(--amber); }
 
 /* -------------------------------------------------------- touch controls */

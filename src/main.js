@@ -271,6 +271,9 @@ async function start() {
     for (const ev of input.drain()) {
       audio.init(); audio.resume();
       if (ev === 'escape') {
+        // A channel is the nearest thing to a modal in flight, so it gets first
+        // refusal on the key that means "get me out of this".
+        if (ui.commsOpen) { ui.closeComms(); continue; }
         if (ui.isOpen) {
           if (game.boarding) endBoarding();
           else if (player.docked) undock();
@@ -278,6 +281,10 @@ async function start() {
         } else ui.open('menu');
         continue;
       }
+      // A channel answers by number. The digits are the mount selectors in
+      // flight, but while you are talking to somebody the conversation has them.
+      if (ui.commsOpen && /^mount[1-6]$/.test(ev) && ui.commsPick(+ev.slice(5))) continue;
+
       if (ui.isOpen) {
         // while an overlay is up, only a few keys pass through
         if (ev === 'skiptut') { tutorial.skip(); ui.setObjective(null); continue; }
@@ -286,6 +293,11 @@ async function start() {
         continue;
       }
       switch (ev) {
+        case 'install': {
+          const b = document.getElementById('installBtn');
+          if (b && !b.classList.contains('hidden')) b.click();
+          break;
+        }
         case 'skiptut':
           tutorial.skip();
           ui.setObjective(null);
@@ -602,6 +614,7 @@ async function start() {
   game.qlookAt = qlook;                 // point a hull at something, from the console
   game.classes = { Boarding };          // handy from the console
   game.batch = batch;
+  game.ui = ui;                         // handy from the console, and from tests
   window.STARQUEST = game;
 }
 

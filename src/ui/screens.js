@@ -218,6 +218,7 @@ export class UI {
 
   closeComms() {
     this.commsTarget = null;
+    this.commsOpts = [];
     this.el.comms.classList.add('hidden');
   }
 
@@ -237,10 +238,25 @@ export class UI {
     this.el.commsWho.textContent =
       `${t.name} · ${t.disabled ? 'ADRIFT' : t.wing ? 'YOUR WING' : t.faction.toUpperCase()}`;
     this.el.commsLine.textContent = state.line || '';
-    this.el.commsOpts.innerHTML = (state.options || [])
-      .map((o) => `<button class="hbtn" data-do-comms="${o.id}">${esc(o.label)}${
+    // Numbered, and the number is the key. A channel is a menu you read under
+    // fire, and reaching for the mouse to answer a pirate is how the conversation
+    // ends badly. The digits are the mount selectors in flight, but while a
+    // channel is open the conversation has them — you are talking, not switching
+    // guns, and Esc gets you out.
+    this.commsOpts = state.options || [];
+    this.el.commsOpts.innerHTML = this.commsOpts
+      .map((o, i) => `<button class="hbtn" data-do-comms="${o.id}"><u>${i + 1}</u>${esc(o.label)}${
         o.hint ? `<i>${esc(o.hint)}</i>` : ''}</button>`).join('');
   }
+
+  /** Answer the channel by number, for the keyboard. */
+  commsPick(n) {
+    const o = this.commsOpts?.[n - 1];
+    if (o) this.comms(o.id);
+    return !!o;
+  }
+
+  get commsOpen() { return !!this.commsTarget; }
 
   /** Drop the channel when the other ship stops being reachable. */
   tickComms() {
@@ -771,7 +787,7 @@ export class UI {
         ['RIGHT SIDE', 'Steering stick — touch anywhere on the right to place it.'],
         ['FIRE', 'Fires the mount you are manning.'],
         ['MODE', 'Switch between piloting and the gunner seat.'],
-        ['TGT', 'Cycle contacts. ACT docks, boards, or scoops.'],
+        ['TGT', 'Nearest hostile first, then the traffic and the places you can fly to. ACT docks, boards, or scoops.'],
         ['INV', 'Inventory, loadout and ship record.'],
       ] : [
         ['W / S', 'Raise and lower the speed you are holding · X stops · wheel trims'],
@@ -782,6 +798,8 @@ export class UI {
         ['T', 'Cycle target · F to dock or board'],
         ['TAB', 'Inventory and loadout · 1-6 change which mount you man'],
         ['G', 'Flight assist · M this manual'],
+        ['H', 'Hail your target · 1-6 answer the channel · Esc closes it'],
+        ['K / I', 'Skip the tutorial · install to the home screen'],
       ]).map(([k, v]) => `<div class="item"><span class="grow"><b>${k}</b><span class="sub">${v}</span></span></div>`).join('')}</div></div>
       <div class="section"><h3>THE BELT</h3>
       <p class="note">Through the jump gate is <b>Cinder Reach</b>: a graveyard of adrift hulls,
