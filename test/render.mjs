@@ -62,7 +62,16 @@ const scenarios = [
   ['hull nearly gone', () => { player.ship.hull = 1; player.ship.shield = 0; }],
   ['hull exactly zero', () => { player.ship.hull = 0; player.ship.shield = 0; }],
   ['gunner seat', () => { player.mode = 'gunner'; player.ship.hull = 200; }],
-  ['at the sector edge', () => { player.ship.pos = [5300, 0, 0]; }],
+  ['at the sector edge', () => { player.ship.pos = [world.radius + 100, 0, 0]; }],
+  ['at a mining claim', () => {
+    const site = world.sites[0];
+    player.ship.pos = [site.pos[0], site.pos[1] + 40, site.pos[2] + 260];
+    player.target = site;
+  }],
+  ['on approach to a claim', () => {
+    const site = world.sites[0];
+    player.ship.pos = [site.pos[0], site.pos[1], site.pos[2] + site.r * 2.2];
+  }],
   ['adrift target', () => {
     const v = createShip('hauler', 'trader', { pos: [player.ship.pos[0], 0, player.ship.pos[2] - 80] });
     addCargo(v, 'gold', 10);

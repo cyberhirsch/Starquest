@@ -181,8 +181,9 @@ function combat(ship, world, dt, control, fleeAt) {
     // Distance used to end a flee on its own, at 2600 m. That is why beaten
     // pirates circled the belt forever: they broke off, got clear, immediately
     // stopped fleeing, turned round and came back, so no fight ever finished and
-    // no runner ever actually left. Now they run for the sector edge and are
-    // gone (see World.confine) unless a repair module patches them up first.
+    // no runner ever actually left. Now they run until they have broken clean
+    // off and are gone (see World.escaped) unless a repair module patches them
+    // up first.
     if (!(truce && t === world.player.ship)
       && (hullFrac > fleeAt + 0.25 || (dist > 2600 && hullFrac > fleeAt))) ai.state = 'hunt';
     return;

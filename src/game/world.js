@@ -4,7 +4,7 @@ import {
   v3, vcopy, vset, vadd, vsub, vscale, vaddScaled, vdot, vlen, vlen2, vnorm, vdist, vdist2,
   vrandSphere, vcross, qid, qaxis, qmul, qnorm, qrot, qforward, qlook, clamp, lerp, rand, randi, pick,
 } from '../core/math.js';
-import { MODULES, ORES, TRADE, rollAsteroidType, SHIPS } from './data.js';
+import { MODULES, ORES, TRADE, rollAsteroidType, ASTEROID_TYPES, SHIPS } from './data.js';
 import { SECTORS, START_SECTOR, sectorOf, arrivalGate } from './sectors.js';
 import { Market } from './station.js';
 import { ASTEROID_SHAPES, ASTEROID_SHAPES_LOW } from '../render/models.js';
@@ -15,7 +15,14 @@ import {
 } from './ship.js';
 import { runAI, inTruce } from './ai.js';
 
+/** How far a sector reaches when its definition does not say. */
 export const SECTOR_R = 5200;
+
+/**
+ * How far a runner has to break off before it counts as having got away. Past
+ * the renderer's draw distance, so it is out of sight before it is gone.
+ */
+const ESCAPE_GAP = 4600;
 
 /** How far back the death screen looks when working out what killed you. */
 const DAMAGE_WINDOW = 25;
@@ -83,6 +90,8 @@ export class World {
     this.station = null;
     this.sector = null;
     this.gates = [];
+    this.sites = [];                // named workings out past the belt
+    this.radius = SECTOR_R;
     this.markets = {};              // one per station, kept between visits
     this.messages = [];
     this.grid = new Grid(420);
@@ -209,6 +218,7 @@ export class World {
     const def = sectorOf(sectorId);
     this.sector = def;
     this.asteroidTarget = def.asteroids;
+    this.radius = def.radius ?? SECTOR_R;
     this._structureList = null;       // a new station and new gates
 
     const st = def.station;
@@ -226,11 +236,55 @@ export class World {
     }));
 
     for (let i = 0; i < def.asteroids; i++) this.spawnAsteroid();
+    this.sites = (def.sites || []).map((sd) => this.buildSite(sd));
     this.spawnPirate(true);          // one, and it starts far away
     for (let i = 0; i < Math.round(2 * def.traders); i++) this.spawnTrader();
     for (let i = 0; i < def.miners; i++) this.spawnMiner();
     for (let i = 0; i < def.derelicts; i++) this.spawnDerelict();
   }
+
+  /**
+   * A named working out past the belt: its own rock, its own beacon, and a name
+   * a contract can put in a brief. The main belt is untouched — the point of a
+   * site is somewhere to be sent, so "anywhere in the sector" stops being the
+   * only kind of job a board can offer.
+   */
+  buildSite(def) {
+    const site = {
+      kind: 'site', id: def.id, name: def.name, def,
+      pos: vcopy(v3(), def.pos), quat: qid(), r: def.r,
+      radius: 6, scale: 8, spin: 0.05,      // the beacon that marks it, not the field
+      blurb: def.blurb,
+    };
+    const seam = ASTEROID_TYPES.find((t) => t.ore === def.ore);
+    for (let i = 0; i < (def.rocks || 0); i++) {
+      this.spawnAsteroid({
+        pos: this.sitePoint(v3(), site), size: rand(52, 10), bias: def.oreBias,
+        // the seam itself, placed rather than rolled — see the note in sectors.js
+        type: seam && Math.random() < (def.purity ?? 0) ? seam : null,
+      });
+    }
+    for (let i = 0; i < (def.wrecks || 0); i++) {
+      this.spawnDerelict({ pos: this.sitePoint(v3(), site) });
+    }
+    return site;
+  }
+
+  /** A point inside a site's cloud, flattened a little so it reads as a field. */
+  sitePoint(out, site) {
+    vrandSphere(out, 1);
+    out[1] *= 0.4;
+    vscale(out, out, rand(site.r, site.r * 0.12));
+    return vadd(out, out, site.pos);
+  }
+
+  /** The site a position is inside, if any. Contracts use this to place work. */
+  siteAt(pos) {
+    for (const s of this.sites) if (vdist2(pos, s.pos) < s.r * s.r) return s;
+    return null;
+  }
+
+  siteById(id) { return this.sites.find((s) => s.id === id) || null; }
 
   /** Forget what has been hurting you — a new hull, or a new sector. */
   clearDamageLog() { this.damageLog = []; this.lastHit = null; }
@@ -240,6 +294,7 @@ export class World {
     const keep = this.ships.filter((s) => s.faction === 'player' && !s.dead);
     this.ships = keep;
     this.asteroids.length = 0;
+    this.sites.length = 0;
     this.projectiles.length = 0;
     this.pods.length = 0;
     this.particles.length = 0;
@@ -267,7 +322,7 @@ export class World {
   }
 
   /** A hull that never made it home: adrift, powerless, and worth boarding. */
-  spawnDerelict() {
+  spawnDerelict(opts = {}) {
     const cls = pick(['hauler', 'prospector', 'corsair', 'shuttle']);
     // a hull is only worth cutting up if it was fitted out when it died
     // weighted toward workaday gear — a dead prospector is not carrying a flak turret
@@ -276,7 +331,7 @@ export class World {
     const kit = ['shield1', 'shield1', 'shield1', 'hold1', 'hold1', 'hold1', 'tractor', 'tractor',
       'scanner', 'scanner', 'thruster', 'thruster', 'armour', 'repair', 'shield2', 'hold2'];
     const s = createShip(cls, 'civilian', {
-      pos: this.randomEdgePoint(v3()),
+      pos: opts.pos ? vcopy(v3(), opts.pos) : this.randomEdgePoint(v3()),
       name: pick(['THE LONG SILENCE', 'ASHFALL', 'MOTHER OF SPARROWS', 'DEAD RECKONING',
         'LAST TUESDAY', 'COLD COMFORT', 'NO SUCH LUCK']),
       credits: Math.round(rand(5200, 400)),
@@ -304,7 +359,7 @@ export class World {
   }
 
   spawnAsteroid(opts = {}) {
-    const type = opts.type || rollAsteroidType(this.sector?.oreBias);
+    const type = opts.type || rollAsteroidType(opts.bias || this.sector?.oreBias);
     const size = opts.size ?? rand(46, 12);
     const pos = opts.pos ? vcopy(v3(), opts.pos) : this.beltPoint(v3());
     const a = {
@@ -336,7 +391,7 @@ export class World {
   randomEdgePoint(out) {
     vrandSphere(out, 1);
     out[1] *= 0.35;
-    return vscale(out, out, rand(SECTOR_R * 0.95, SECTOR_R * 0.6));
+    return vscale(out, out, rand(this.radius * 0.95, this.radius * 0.6));
   }
 
   /* ------------------------------------------------------------ spawns -- */
@@ -690,12 +745,24 @@ export class World {
     for (const a of this.asteroids) check(a, a.size);
     if (this.station) check(this.station, this.station.radius * this.station.scale);
     for (const g of this.gates) check(g, g.radius * g.scale);
+    for (const st of this.sites) check(st, st.radius * st.scale);
     return best;
   }
 
+  /**
+   * Everything TGT will step through: contacts first because a fight is the
+   * urgent case, then the places. A sector you can be sent across needs a way
+   * to point the nose at where you were sent — the target panel's name and
+   * range is that way, so the cycle has to include somewhere to go, not only
+   * something to shoot.
+   */
   cycleTarget(current) {
-    const list = this.ships.filter((s) => !s.dead)
-      .sort((x, y) => vdist2(this.player.ship.pos, x.pos) - vdist2(this.player.ship.pos, y.pos));
+    const from = this.player.ship.pos;
+    const by = (x, y) => vdist2(from, x.pos) - vdist2(from, y.pos);
+    const list = [
+      ...this.ships.filter((s) => !s.dead).sort(by),
+      ...[...(this.station ? [this.station] : []), ...this.gates, ...this.sites].sort(by),
+    ];
     if (!list.length) return null;
     const i = list.indexOf(current);
     return list[(i + 1) % list.length];
@@ -755,6 +822,7 @@ export class World {
       updateTurrets(s, this, dt);
       regen(s, dt, this.time - s.lastHitAt < 5);
       if (s !== player) flyShip(s, s.control || { throttle: s.throttle }, dt);
+      this.escaped(s, dt);
       this.confine(s, dt);
     }
     for (let i = this.ships.length - 1; i >= 0; i--) {
@@ -768,7 +836,7 @@ export class World {
       qmul(a.quat, a.quat, qaxis(_qtmp, a.spinAxis, a.spinRate * dt));
       qnorm(a.quat);
       a.flash = Math.max(0, a.flash - dt * 2.5);
-      if (vlen2(a.pos) > SECTOR_R * SECTOR_R * 1.3) {
+      if (vlen2(a.pos) > this.radius * this.radius * 1.3) {
         vnorm(_a, a.pos); vscale(a.vel, _a, -Math.abs(vlen(a.vel)) || -5);
       }
     }
@@ -803,33 +871,50 @@ export class World {
   confine(s, dt) {
     if (s === this.player.ship) return;
     const d2 = vlen2(s.pos);
-    if (d2 <= SECTOR_R * SECTOR_R) return;
+    if (d2 <= this.radius * this.radius) return;
     const d = Math.sqrt(d2);
     vnorm(_a, s.pos);
-    // A fighter running for its life, past the buoys and still pushing outward,
-    // is gone — it made it. Bouncing it off an invisible wall left beaten
-    // pirates circling the edge forever, so a fight you had won never ended.
-    //
-    // The test is where its nose is pointed, not how fast it is going or how far
-    // out it has got. The boundary's pull balances a hull's drives within ~40 m
-    // of the line whatever its rating, so a ship pressed against it has a
-    // velocity near zero and can never reach a distance margin big enough to be
-    // unambiguous — both of the obvious tests are unsatisfiable by construction.
-    if (s !== this.player.ship && !s.wing && s.ai?.state === 'flee'
-      && d > SECTOR_R && vdot(qforward(_b, s.quat), _a) > 0.5) {
-      s.outbound = (s.outbound || 0) + dt;
-      if (s.outbound > 2) {
-        s.dead = true;
-        s.escaped = true;
-        s.deadAt = this.time;       // reaped by the sweep below, with no explosion
-        if (s.target === this.player.ship || s.angryAt === this.player.ship) {
-          this.log(`${s.name} MADE IT OUT`, 'warn');
-        }
-        return;
-      }
-    } else s.outbound = 0;
-    const pull = (d - SECTOR_R) * 0.6;
+    const pull = (d - this.radius) * 0.6;
     vaddScaled(s.vel, s.vel, _a, -pull * dt);
+  }
+
+  /**
+   * A fighter running for its life that has broken clean off is gone — it made
+   * it. Bouncing beaten pirates around forever left a fight you had won with no
+   * ending, and kept the belt from ever reading as clear.
+   *
+   * Measured from you, not from the middle of the sector. It used to need the
+   * runner to cross the sector shell, which was fine while every sector was the
+   * same 5.2 km across; once a sector could be 11 km a pirate that broke off
+   * mid-belt stayed on the scope for a minute and a half, holding off the quiet
+   * the belt owes you for clearing it. Getting away from you is what escaping
+   * actually is, and it is the same rule in a small sector and a large one.
+   *
+   * The gap is past the draw distance on purpose: the runner has already faded
+   * out of the canopy before it is reaped, so nothing ever blinks out on screen.
+   * The test is where its nose is pointed rather than its speed, because a hull
+   * shot below a third has lost drive power and a speed test would never fire.
+   */
+  escaped(s, dt) {
+    if (s === this.player.ship || s.wing || s.dead) return;
+    if (s.ai?.state !== 'flee') { s.outbound = 0; return; }
+    // Clear of whoever it is running from — which is not always you; pirates
+    // rob traders too — and clear of you, so nothing is ever reaped in sight.
+    const from = s.target && !s.target.dead ? s.target : this.player.ship;
+    if (vdist2(s.pos, this.player.ship.pos) < ESCAPE_GAP * ESCAPE_GAP) { s.outbound = 0; return; }
+    vsub(_a, s.pos, from.pos);
+    const gap = vlen(_a);
+    if (gap < ESCAPE_GAP) { s.outbound = 0; return; }
+    vscale(_a, _a, 1 / gap);
+    if (vdot(qforward(_b, s.quat), _a) < 0.5) { s.outbound = 0; return; }
+    s.outbound = (s.outbound || 0) + dt;
+    if (s.outbound <= 2) return;
+    s.dead = true;
+    s.escaped = true;
+    s.deadAt = this.time;           // reaped by the sweep, with no explosion
+    if (s.target === this.player.ship || s.angryAt === this.player.ship) {
+      this.log(`${s.name} MADE IT OUT`, 'warn');
+    }
   }
 
   updateProjectiles(dt) {
@@ -883,6 +968,9 @@ export class World {
             while (this.oreAccum[key] >= 1) {
               this.oreAccum[key] -= 1;
               if (addCargo(this.player.ship, key, 1) === 0) break;
+              // measured at the rock, not at the ship: a claim job is about
+              // which field the ore came out of
+              this.onContractMine?.(key, 1, hit.pos);
             }
           }
           if (hit.hp <= 0) this.breakAsteroid(hit, p.owner);
@@ -930,6 +1018,7 @@ export class World {
         if (got > 0) {
           this.log(`+${got} ${(ORES[pod.item] || TRADE[pod.item] || { name: pod.item }).name}`, 'good');
           this.player.stats.mined += got;
+          this.onContractMine?.(pod.item, got, pod.pos);
           pod.qty -= got;
         } else this.warnHoldFull();
         if (pod.qty <= 0) { this.pods.splice(i, 1); continue; }
@@ -1074,7 +1163,7 @@ export class World {
     // Out past the belt there is nothing, and nothing arrives to keep you
     // company. Without this the director would keep placing pirates beside a
     // player who had flown into empty space to look at the stars.
-    if (vlen2(this.player.ship.pos) > (SECTOR_R * 1.4) ** 2) { this.spawnTimer = 8; return; }
+    if (vlen2(this.player.ship.pos) > (this.radius * 1.4) ** 2) { this.spawnTimer = 8; return; }
 
     if (this.spawnTimer <= 0) {
       this.spawnTimer = rand(45, 25);

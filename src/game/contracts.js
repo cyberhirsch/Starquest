@@ -100,9 +100,70 @@ function stripContract(world, player) {
   };
 }
 
+/* --------------------------------------------------------------- on site -- */
+/*
+ * Jobs that name a place. The board used to say "anywhere in the belt" for
+ * everything it offered, which is a fine way to describe work and a poor way to
+ * describe a destination — there was nowhere to be sent. These name one of the
+ * sector's outlying workings, and only count there.
+ */
+
+/** What a claim is named for, and what is actually in the ground there. */
+const seamOf = (site) => site.def.ore || 'iron';
+
+const siteJob = (world, extra) => ({
+  id: `c${NEXT++}`, progress: 0,
+  station: world.station.def.id,
+  siteSector: world.sector.id,
+  ...extra,
+});
+
+function prospectContract(world, player) {
+  const fields = world.sites.filter((s) => s.def.kind === 'field');
+  if (!fields.length) return null;
+  const site = pick(fields);
+  const item = seamOf(site);
+  const hold = player.ship?.stats?.cargoMax ?? 30;
+  const count = Math.max(10, Math.min(18 + randi(30), Math.floor(hold * 0.9)));
+  return siteJob(world, {
+    type: 'prospect', need: count, item, site: site.id, siteName: site.name,
+    title: `PROSPECT — ${count} ${ITEMS[item].name} AT ${site.name}`,
+    brief: `${site.name}: ${site.blurb} Cut ${count} units of ${ITEMS[item].name} out of that field specifically — the assay is on the claim, not on you, so rock from anywhere else does not count.`,
+    reward: money(count * ITEMS[item].price * rand(4.6, 3.4)),
+  });
+}
+
+function sweepContract(world, player) {
+  if (!world.sites.length) return null;
+  const site = pick(world.sites);
+  const count = 2 + randi(2);
+  const tier = 1 + (world.sector?.danger ?? 0) * 0.5;
+  return siteJob(world, {
+    type: 'sweep', need: count, site: site.id, siteName: site.name,
+    title: `SWEEP — ${count} HULLS AT ${site.name}`,
+    brief: `Crews will not work ${site.name} while it is being picked over. Put ${count} pirate hulls down inside the claim itself; kills made elsewhere are somebody else's paperwork.`,
+    reward: money(count * rand(2600, 1700) * tier),
+  });
+}
+
+function recoveryContract(world, player) {
+  const fields = world.sites.filter((s) => s.def.kind === 'wrecks');
+  if (!fields.length) return null;
+  const site = pick(fields);
+  const count = 1 + randi(2);
+  return siteJob(world, {
+    type: 'recovery', need: count, site: site.id, siteName: site.name,
+    title: `RECOVERY — ${count} HULL${count > 1 ? 'S' : ''} AT ${site.name}`,
+    brief: `${site.name}: ${site.blurb} Board ${count} of them and bring the manifests back. A breaching rig is not optional.`,
+    reward: money(count * rand(5600, 3800)),
+  });
+}
+
 const MAKERS = {
-  halcyon: [bountyContract, supplyContract, supplyContract, courierContract],
-  cinder: [stripContract, stripContract, salvageContract, bountyContract, courierContract, supplyContract],
+  halcyon: [bountyContract, supplyContract, courierContract,
+    prospectContract, prospectContract, sweepContract],
+  cinder: [stripContract, salvageContract, bountyContract, courierContract, supplyContract,
+    prospectContract, sweepContract, recoveryContract, recoveryContract],
 };
 
 /** Refresh the board a station is offering. */
@@ -155,12 +216,38 @@ function pay(player, c, world) {
 
 /* ------------------------------------------------------------- signals -- */
 
+/**
+ * Did this happen where the job said it had to? A site job names one working in
+ * one sector, so both have to match — carrying a Halcyon claim into the reach
+ * and shooting something must not tick it over.
+ */
+const onSite = (c, world, pos) =>
+  c.siteSector === world.sector?.id && world.siteAt(pos)?.id === c.site;
+
+const step = (player, world, c, label, by = 1) => {
+  c.progress += by;
+  if (c.progress >= c.need) pay(player, c, world);
+  else world.log(`${label} ${Math.floor(c.progress)}/${c.need}`, 'good');
+};
+
 export function onKill(player, world, ship) {
   for (const c of [...player.contracts]) {
-    if (c.type !== 'bounty' || ship.faction !== 'pirate') continue;
-    c.progress++;
-    if (c.progress >= c.need) pay(player, c, world);
-    else world.log(`BOUNTY ${c.progress}/${c.need}`, 'good');
+    if (ship.faction !== 'pirate') continue;
+    if (c.type === 'bounty') step(player, world, c, 'BOUNTY');
+    else if (c.type === 'sweep' && onSite(c, world, ship.pos)) step(player, world, c, 'SWEEP');
+  }
+}
+
+/**
+ * Ore cut or scooped somewhere. Only the units that came out of the named claim
+ * count, which is the whole point of a job that names one — and it is measured
+ * where the rock was, not where you were standing.
+ */
+export function onMine(player, world, item, qty, pos) {
+  for (const c of [...player.contracts]) {
+    if (c.type !== 'prospect' || c.item !== item) continue;
+    if (!onSite(c, world, pos)) continue;
+    step(player, world, c, 'PROSPECT', qty);
   }
 }
 
@@ -175,6 +262,10 @@ export function onStrip(player, world, ship) {
 
 export function onBoard(player, world, ship) {
   for (const c of [...player.contracts]) {
+    if (c.type === 'recovery' && onSite(c, world, ship.pos)) {
+      step(player, world, c, 'RECOVERY');
+      continue;
+    }
     if (c.type !== 'salvage') continue;
     c.progress++;
     if (c.progress >= c.need) pay(player, c, world);
@@ -224,6 +315,12 @@ export function tracked(player, world) {
   } else if (c.type === 'courier') {
     count = player.ship.cargo.crate || 0;
     body = `${count}/${c.units} crates — deliver to ${c.toName}`;
+  } else if (c.site) {
+    // A job with a destination should say the destination, every time you look
+    // at it — the reward is not the part you need reminding of out there.
+    count = Math.floor(c.progress);
+    const unit = c.type === 'prospect' ? ` ${ITEMS[c.item].name}` : '';
+    body = `${count}/${c.need}${unit} at ${c.siteName} — target it on TGT`;
   } else {
     count = c.progress;
     body = `${c.progress}/${c.need} — reward ${c.reward.toLocaleString('en-US')} cr`;

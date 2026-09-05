@@ -79,7 +79,10 @@ export function drawHUD(batch, g) {
     const d = vdist(t.pos, cam.pos);
     const tcol = t.kind === 'ship' ? (world.isHostile(ship, t) ? C.danger : factionColor(t))
       : t.kind === 'asteroid' ? (ORE_COLORS[t.type.ore] || C.rock) : C.station;
-    const radius = (t.radius ? t.radius * (t.scale || 1) : t.size) || 20;
+    // A claim marker is a point in the middle of a field a kilometre across, so
+    // its bracket is drawn to the field rather than to the buoy on the mast.
+    const spread = t.kind === 'site' ? t.r * 0.5 : 0;
+    const radius = spread || (t.radius ? t.radius * (t.scale || 1) : t.size) || 20;
     if (project(_p, t.pos, cam.viewProj, W, H)) {
       const px = clamp(_p[0], 0, W), py = clamp(_p[1], 0, H);
       const scr = clamp((radius / Math.max(d, 1)) * (H * 0.9), 22 * u, 260 * u);

@@ -103,6 +103,7 @@ async function start() {
   world.onWingLost = (ship) => Crew.onWingLost(player, world, ship);
   world.onContractKill = (ship) => Contracts.onKill(player, world, ship);
   world.onContractBoard = (ship) => Contracts.onBoard(player, world, ship);
+  world.onContractMine = (item, qty, pos) => Contracts.onMine(player, world, item, qty, pos);
   world.onHulkStripped = (ship) => Contracts.onStrip(player, world, ship);
 
   world.onPlayerDamage = (hit) => {

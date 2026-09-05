@@ -183,6 +183,33 @@ check('you can be far outside the belt', far > 25000, `${(far / 1000).toFixed(0)
 await page.screenshot({ path: 'docs/shot-deep.png' });
 await read(() => { window.STARQUEST.player.ship.pos = [0, 0, -900]; });
 
+// --- somewhere to be sent ----------------------------------------------------
+await read(() => {
+  const g = window.STARQUEST;
+  const site = g.world.sites[0];
+  const s = g.player.ship;
+  s.pos = [site.pos[0], site.pos[1] + 60, site.pos[2] + 420];
+  s.vel = [0, 0, 0];
+  const d = [site.pos[0] - s.pos[0], site.pos[1] - s.pos[1], site.pos[2] - s.pos[2]];
+  const l = Math.hypot(...d);
+  g.qlookAt(s.quat, [d[0] / l, d[1] / l, d[2] / l]);
+  g.player.target = site;
+});
+await page.waitForTimeout(1400);
+const claim = await read(() => {
+  const g = window.STARQUEST;
+  const site = g.world.sites[0];
+  return {
+    name: document.getElementById('tgtName').textContent,
+    info: document.getElementById('tgtInfo').textContent,
+    rocks: g.world.asteroids.filter((a) => g.world.siteAt(a.pos) === site).length,
+  };
+});
+check('a claim names itself on the target panel', claim.name === 'THE COLD SHOAL', claim.name);
+check('and says what it is', /CLAIM/.test(claim.info), claim.info);
+check('with its own field of rock around it', claim.rocks > 40, `${claim.rocks} rocks`);
+await page.screenshot({ path: 'docs/shot-claim.png' });
+
 // --- a sector should look like a place ---------------------------------------
 await read(() => {
   const g = window.STARQUEST;

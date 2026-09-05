@@ -89,6 +89,7 @@ export function drawScene(batch, world, cam, opts = {}) {
 
   if (world.station) drawStation(batch, world.station, eye);
   for (const g of world.gates || []) drawGate(batch, g, eye, world.time);
+  for (const st of world.sites || []) drawSite(batch, st, eye, world.time);
 
   for (const s of world.ships) {
     if (s === opts.hideShip) continue;
@@ -144,6 +145,38 @@ function drawStation(batch, st, eye) {
     vaddScaled(_e, _e, _d, Math.sin(ang) * 16);
     vaddScaled(_f, _e, _a, 8);
     batch.line3v(_e, _f, C.warn, 2.2, a * blink, 1.4);
+  }
+}
+
+/**
+ * The beacon that marks a named working. It carries further than the station
+ * does — a site is a place you are sent to, so it has to be findable from
+ * outside the rock cloud it stands in, or the contract that named it is just a
+ * coordinate.
+ */
+function drawSite(batch, st, eye, time) {
+  const d = vdist(st.pos, eye);
+  const a = fade(d, 7000, 11000);
+  if (a <= 0) return;
+  batch.mesh(MODELS.buoy, st.pos, st.quat, st.scale, C.station, 1.6, a, 1.0);
+  // strobe on the mast, slow enough to read as a marker rather than an alarm
+  const blink = Math.max(0, Math.sin(time * 1.9)) ** 3;
+  const top = vaddScaled(_a, st.pos, [0, 1, 0], st.scale * 3.4);
+  batch.line3v(top, vaddScaled(_b, top, [0, 1, 0], st.scale * 0.7), C.warn, 3.0, a * blink, 1.6);
+  // a ring at the field's edge, so arriving is a thing that visibly happens
+  if (d < st.r * 3) {
+    const edge = fade(d, st.r * 1.6, st.r * 3) * 0.5 * a;
+    if (edge > 0) {
+      const segs = 28;
+      let px = 0, py = 0, pz = 0;
+      for (let i = 0; i <= segs; i++) {
+        const ang = (i / segs) * Math.PI * 2;
+        const x = st.pos[0] + Math.cos(ang) * st.r;
+        const z = st.pos[2] + Math.sin(ang) * st.r;
+        if (i > 0) batch.line3(px, py, pz, x, st.pos[1], z, C.station, 1.2, edge, 0.8);
+        px = x; py = st.pos[1]; pz = z;
+      }
+    }
   }
 }
 

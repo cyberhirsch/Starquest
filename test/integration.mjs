@@ -1,7 +1,7 @@
 // Headless play-through of the systems the renderer sits on top of.
 // Run: node test/integration.mjs
 
-import { World, SECTOR_R } from '../src/game/world.js';
+import { World } from '../src/game/world.js';
 import { Player } from '../src/game/player.js';
 import { Market, sellAllOre, buyShip, buyModule, repair } from '../src/game/station.js';
 import { Boarding, boardBlocker } from '../src/game/boarding.js';
@@ -697,7 +697,7 @@ section('LEGIBILITY');
   w2.player.buildShip(w2);
   w2.generate();
   const bolter = w2.spawnPirate();
-  bolter.pos = v3(0, 0, -SECTOR_R * 0.97);
+  bolter.pos = v3(0, 0, -w2.radius * 0.97);   // the sector's own edge, not the default
   bolter.vel = v3(0, 0, -60);
   bolter.hull = bolter.stats.hullMax * 0.1;
   bolter.target = w2.player.ship;
@@ -886,19 +886,19 @@ section('OPEN SPACE');
     w.update(1 / 60);
   }
   const out = vlen3(me.pos);
-  ok('you can fly out as far as you like', out > SECTOR_R * 4,
-    `${(out / 1000).toFixed(0)} km out, sector radius ${(SECTOR_R / 1000).toFixed(1)} km`);
+  ok('you can fly out as far as you like', out > w.radius * 3,
+    `${(out / 1000).toFixed(0)} km out, sector radius ${(w.radius / 1000).toFixed(1)} km`);
   ok('under power the whole way, not adrift', vlen3(me.vel) > me.stats.maxSpeed * 0.95 && !me.dead,
     `${vlen3(me.vel).toFixed(0)} of ${me.stats.maxSpeed.toFixed(0)} m/s`);
 
   // The sector's own traffic still stays in the sector, or there would be
   // nothing left to trade with by the time you came back.
   const stray = w.ships.find((s) => s.ai && s.faction !== 'player');
-  ok('but the locals stay home', !stray || vlen3(stray.pos) < SECTOR_R * 1.3,
+  ok('but the locals stay home', !stray || vlen3(stray.pos) < w.radius * 1.3,
     stray ? `nearest local ${(vlen3(stray.pos) / 1000).toFixed(1)} km from centre` : 'none left');
 
   // ...and you can always find your way back.
-  ok('and home is still on the instruments', !!w.station && vlen3(w.station.pos) < SECTOR_R);
+  ok('and home is still on the instruments', !!w.station && vlen3(w.station.pos) < w.radius);
 }
 {
   // Out in the dark the director has to stay quiet. Left alone it places
@@ -911,7 +911,7 @@ section('OPEN SPACE');
   w.grace = 0;
   w.log = () => {};
   const me = w.player.ship;
-  me.pos = v3(SECTOR_R * 3, 0, 0); me.vel = v3(0, 0, 0);
+  me.pos = v3(w.radius * 3, 0, 0); me.vel = v3(0, 0, 0);
   qlook(me.quat, v3(1, 0, 0));
   let nearby = 0;
   for (let i = 0; i < 60 * 300; i++) {
@@ -922,6 +922,118 @@ section('OPEN SPACE');
   }
   ok('and there is nothing out there', nearby === 0,
     `${nearby} pirates found you ${(vlen3(me.pos) / 1000).toFixed(0)} km out, over five minutes`);
+}
+
+/* --------------------------------------------------------------- sites */
+section('SITES');
+{
+  // Jumping the second gate ends the demo, and a sector that is one belt with
+  // one station has nowhere to send you: every job the board could write said
+  // "anywhere in the belt", which describes work but never a destination.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  w.log = () => {};
+  const beltR = 5200;               // the main cluster, deliberately unchanged
+  ok('the sector reaches further than the belt does', w.radius > beltR * 1.5,
+    `${(w.radius / 1000).toFixed(0)} km sector around a ${(beltR / 1000).toFixed(1)} km belt`);
+  ok('and there are places out there to be sent to', w.sites.length === 2,
+    w.sites.map((x) => x.name).join(', '));
+  const out = w.sites.every((x) => vlen3(x.pos) > beltR && vlen3(x.pos) + x.r < w.radius);
+  ok('each one clear of the belt but inside the sector', out,
+    w.sites.map((x) => `${x.name} ${(vlen3(x.pos) / 1000).toFixed(1)} km`).join(', '));
+
+  // A claim is only worth naming if the ore is actually there.
+  const shoal = w.siteById('shoal');
+  const rocks = w.asteroids.filter((a) => w.siteAt(a.pos) === shoal);
+  const ice = rocks.filter((a) => a.type.ore === 'ice').length;
+  ok('a claim is made of the rock it is named for', rocks.length > 40 && ice / rocks.length > 0.45,
+    `${ice} of ${rocks.length} rocks at ${shoal.name} are ice`);
+
+  // The one that actually needed fixing. A multiplier on the sector's mix
+  // cannot make a rare ore dominant — 2.4x on platinum, base weight 8 against
+  // iron's 34, measured 20% — so the claim named for platinum was an iron field
+  // with a platinum name, and the job that sent you there was fiction.
+  const anvil = w.siteById('anvil');
+  const hard = w.asteroids.filter((a) => w.siteAt(a.pos) === anvil);
+  const plat = hard.filter((a) => a.type.ore === 'platinum').length;
+  ok('including a claim named for a rare one', plat / hard.length > 0.4,
+    `${plat} of ${hard.length} rocks at ${anvil.name} are platinum, against a 6% belt average`);
+  const belt = w.asteroids.filter((a) => !w.siteAt(a.pos));
+  const beltIce = belt.filter((a) => a.type.ore === 'ice').length / belt.length;
+  ok('and the belt is still the belt', belt.length > 180 && beltIce < 0.35,
+    `${belt.length} rocks in the main cluster, ${(beltIce * 100).toFixed(0)}% ice`);
+
+  // You have to be able to find it.
+  let t = null; const seen = new Set();
+  for (let i = 0; i < 60; i++) { t = w.cycleTarget(t); if (!t) break; seen.add(t.name || t.kind); }
+  ok('TGT will step through the places, not only the ships',
+    w.sites.every((x) => seen.has(x.name)) && seen.has(w.station.name),
+    `${w.sites.length} claims, the depot and the gate are all on the cycle`);
+}
+{
+  // A wreck field has wrecks in it, or the job that sends you there is fiction.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate('cinder');
+  w.log = () => {};
+  const march = w.siteById('march');
+  const hulks = w.ships.filter((x) => x.hulk && w.siteAt(x.pos) === march).length;
+  ok('the wreck field is made of wrecks', hulks >= 4, `${hulks} adrift hulls at ${march.name}`);
+}
+{
+  // The point of a job that names a place: it only counts in that place.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  w.log = () => {};
+  w.onContractMine = (item, qty, pos) => Contracts.onMine(w.player, w, item, qty, pos);
+  let job = null;
+  for (let i = 0; i < 80 && !job; i++) {
+    job = Contracts.rollBoard(w, w.player, 4).find((c) => c.type === 'prospect');
+  }
+  ok('the board offers work with an address on it', !!job, job?.title);
+  Contracts.accept(w.player, job, w);
+  const live = () => w.player.contracts[0];
+  const site = w.siteById(job.site);
+  w.onContractMine(job.item, 5, v3(0, 0, -900));
+  const inBelt = live().progress;
+  w.onContractMine(job.item, 5, site.pos);
+  const atSite = live().progress;
+  ok('rock cut in the belt does not count against a claim job', inBelt === 0);
+  ok('rock cut at the claim does', atSite === 5, `${atSite}/${job.need}`);
+
+  // ...and carrying it to the next sector does not settle it either.
+  w.jumpTo('cinder');
+  w.onContractMine(job.item, 5, v3(...site.pos));
+  ok('and the claim does not follow you through the gate',
+    w.player.contracts[0].progress === atSite, `${w.player.contracts[0].progress}/${job.need}`);
+}
+{
+  // A runner is gone when it has broken off from you, not when it crosses a
+  // shell: the shell test worked while every sector was 5.2 km across and left
+  // a beaten pirate on the scope for a minute and a half once one was 11 km.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate('cinder');
+  w.log = () => {};
+  w.player.ship.pos = v3(0, 0, 0);
+  const runner = w.spawnPirate();
+  runner.pos = v3(0, 0, -1800);
+  runner.hull = runner.stats.hullMax * 0.1;
+  runner.target = w.player.ship;
+  runner.ai = { role: 'pirate', state: 'flee', t: 0, orbit: 380, sign: 1 };
+  let secs = 0, gapWhenGone = 0;
+  for (let i = 0; i < 60 * 240 && !runner.dead; i++) {
+    w.update(1 / 60);
+    secs = i / 60;
+    gapWhenGone = vdist(runner.pos, w.player.ship.pos);
+  }
+  ok('a beaten runner still gets away', runner.dead && runner.escaped, `after ${secs.toFixed(0)} s`);
+  ok('without the sector having to be small', secs < 90 && w.radius > 9000,
+    `${secs.toFixed(0)} s in an ${(w.radius / 1000).toFixed(0)} km sector`);
+  ok('and it is out of sight before it goes', gapWhenGone > 4200,
+    `${(gapWhenGone / 1000).toFixed(1)} km away, past the 4.2 km draw distance`);
 }
 
 /* ------------------------------------------------------------- regions */

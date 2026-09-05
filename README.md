@@ -133,12 +133,39 @@ around 40% over the odds for ore and dumps salvaged goods cheap, while Halcyon D
 the reverse. That is a trade route: mine here, sell there, fill the hold with cheap
 goods, sell them back home.
 
+## Named claims
+
+Each sector reaches further than its belt does — 9 km in Halcyon, 11 in Cinder — and out
+past the working rock there are two named claims in each, marked by a beacon and a ring
+you can see as you come up on them. The main belt is unchanged; the claims are somewhere
+to be *sent*.
+
+- **THE COLD SHOAL** — ice and silicon, worked out of a licensed Halcyon claim.
+- **TANNER'S ANVIL** — platinum and gold, far enough out that the patrols are a rumour.
+- **THE SPILL** — a freighter's xenite cargo across four hundred metres of rock.
+- **HOLLOW MARCH** — a line of hulls in Cinder that all stopped in the same place.
+
+A claim is made of the rock it is named for: about three rocks in five at the Anvil are
+platinum, against roughly one in sixteen anywhere else. That matters because the board
+now writes jobs with an address on them, and a job that sends you somewhere had better be
+sending you somewhere worth the flight.
+
+TGT steps through places as well as contacts — the depot, the gate and both claims are on
+the cycle, with the name and range on the target panel and a bearing arrow when it is off
+screen.
+
 ## Contracts
 
 Halcyon Depot and Tallow Yard both keep a board. Bounties on pirate hulls, supply runs
 settled out of your hold the moment you dock, sealed courier freight for the other
 station, and salvage jobs paid on boarding adrift hulls. Three at a time; the tracked
 one shows on the HUD. Dropping one costs you standing.
+
+Some jobs name a place, and those only count there. **PROSPECT** wants so many units of
+one ore cut out of one claim — rock from the main belt does not count, and neither does
+carrying the job through the gate. **SWEEP** wants pirate hulls put down inside the claim
+itself. **RECOVERY** wants hulls boarded at Hollow March. The open jobs are still there,
+so the board is a mix of work you can do anywhere and work with an address.
 
 The job on the HUD is the one you tracked (TRACK on the CONTRACTS tab), and its
 counter moves as your hold fills.

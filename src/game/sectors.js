@@ -13,6 +13,7 @@ export const SECTORS = {
   halcyon: {
     id: 'halcyon',
     name: 'HALCYON BELT',
+    radius: 9000,                     // the belt is unchanged; this is how far the sector reaches
     blurb: 'A working belt under Authority licence. Good rock, patrolled lanes, and haulers running ore out by the ton.',
     asteroids: 190,
     oreBias: null,                    // the default spread
@@ -47,11 +48,46 @@ export const SECTORS = {
       priceBias: { ore: 1.0, goods: 1.24, salvage: 0.78 },
     },
     gates: [{ to: 'cinder', pos: [3300, 240, 2500] }],
+    // Two workings out past the main belt. The belt itself is unchanged — these
+    // are somewhere to be sent, so a contract can name a place instead of
+    // "anywhere in the sector", and arriving somewhere means arriving at
+    // something rather than at a coordinate.
+    sites: [
+      {
+        id: 'shoal',
+        name: 'THE COLD SHOAL',
+        kind: 'field',
+        pos: [-6400, 220, -4900],
+        r: 820,
+        rocks: 54,
+        // `ore` is what the claim is named for and is placed directly, because a
+        // multiplier on the sector's mix cannot make a rare ore dominant: 2.4x
+        // on platinum, whose base weight is 8 against iron's 34, still leaves
+        // four rocks in five iron — so a claim named for platinum was not one.
+        ore: 'ice',
+        purity: 0.62,
+        oreBias: { silicon: 1.8, iron: 0.8, gold: 0.4, platinum: 0.4, xenite: 0.2 },
+        blurb: 'A shoal of ice and silicon, worked out of a licensed claim.',
+      },
+      {
+        id: 'anvil',
+        name: "TANNER'S ANVIL",
+        kind: 'field',
+        pos: [5900, -280, 5300],
+        r: 740,
+        rocks: 44,
+        ore: 'platinum',
+        purity: 0.55,
+        oreBias: { gold: 2.6, iron: 1.2, silicon: 0.5, ice: 0.2, xenite: 0.4 },
+        blurb: 'Heavy metal, and far enough out that the patrols are a rumour.',
+      },
+    ],
   },
 
   cinder: {
     id: 'cinder',
     name: 'CINDER REACH',
+    radius: 11000,
     blurb: 'A graveyard. Hulls that never came home, scavengers who did, and nobody wearing a badge.',
     asteroids: 110,
     oreBias: { iron: 1.6, silicon: 1.4, ice: 0.5, gold: 0.7, platinum: 1.1, xenite: 1.8 },
@@ -86,6 +122,30 @@ export const SECTORS = {
       priceBias: { ore: 1.38, goods: 0.72, salvage: 1.55 },
     },
     gates: [{ to: 'halcyon', pos: [-2900, -180, -2600] }],
+    sites: [
+      {
+        id: 'spill',
+        name: 'THE SPILL',
+        kind: 'field',
+        pos: [-5800, 420, -6600],
+        r: 780,
+        rocks: 46,
+        ore: 'xenite',
+        purity: 0.58,
+        oreBias: { iron: 1.3, silicon: 0.9, ice: 0.3, gold: 0.6, platinum: 1.0 },
+        blurb: 'Whatever a freighter was carrying, spread across four hundred metres of rock.',
+      },
+      {
+        id: 'march',
+        name: 'HOLLOW MARCH',
+        kind: 'wrecks',
+        pos: [6800, -340, 5400],
+        r: 860,
+        rocks: 16,
+        wrecks: 4,
+        blurb: 'A line of hulls that all stopped in the same place, for reasons nobody wrote down.',
+      },
+    ],
   },
 };
 

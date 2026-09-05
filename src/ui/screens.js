@@ -178,6 +178,12 @@ export class UI {
         this.el.tgtInfo.textContent = ship.stats.scanner
           ? `${Math.round(t.ore)} UNITS · ${ITEMS[t.type.ore].name} · ${cr(t.ore * ITEMS[t.type.ore].price)} CR`
           : `${Math.round(t.size)}M ROCK`;
+      } else if (t.kind === 'site') {
+        this.el.tgtName.textContent = t.name;
+        this.el.tgtHull.style.width = '100%';
+        this.el.tgtShield.style.width = '100%';
+        this.el.tgtInfo.textContent = t.def.kind === 'wrecks'
+          ? 'WRECK FIELD — CLAIM MARKER' : 'MINING CLAIM — ORE FIELD';
       } else if (t.kind === 'gate') {
         this.el.tgtName.textContent = t.name;
         this.el.tgtHull.style.width = '100%';
