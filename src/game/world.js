@@ -1167,7 +1167,12 @@ export class World {
     this.grace = Math.max(0, this.grace - dt);
     this.spawnTimer -= dt;
     this.traderTimer -= dt;
-    const pirates = this.ships.filter((s) => s.faction === 'pirate' && !s.dead).length;
+    // What is still a threat, which is not the same as what is still on the
+    // scope. A hull with its drives ioned out is adrift and boardable — it is
+    // cargo, not an enemy — but it counted as one here, so leaving one floating
+    // meant the belt never announced itself clear and, being at quota, never
+    // sent anything else either: the sector went permanently, silently dead.
+    const pirates = this.ships.filter((s) => s.faction === 'pirate' && !s.dead && !s.disabled).length;
     const want = this.grace > 0 ? 0
       : Math.round((2 + Math.floor(this.sector?.danger ?? 0)) * (this.sector?.pirates ?? 1));
 

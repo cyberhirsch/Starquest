@@ -238,7 +238,8 @@ activity, and the belt chatters over the open channel while you fly.
   to leaving rather than circling back, and if it reaches the buoys still running
   it is gone for good — chase it down or let it go. Every hull you put down buys about half a
   minute before the next one arrives, so a fight you are winning gets easier rather
-  than being topped straight back up to quota; clear the sector out entirely and it
+  than being topped straight back up to quota; deal with the last enemy in the sector
+  — shot to pieces or ioned and left adrift, a hulk is cargo either way — and it
   stays clear for two to three minutes: long enough to mine, scoop and sell without
   looking over your shoulder. Shoot a licensed hull and the
   Authority prices your head; kill a pirate and you are paid a bounty.

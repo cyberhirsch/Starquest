@@ -5,7 +5,7 @@ import { World } from '../src/game/world.js';
 import { Player } from '../src/game/player.js';
 import { Market, sellAllOre, buyShip, buyModule, repair } from '../src/game/station.js';
 import { Boarding, boardBlocker } from '../src/game/boarding.js';
-import { createShip, flyShip, fireMount, updateTurrets, damageShip, destroyShip, cargoUsed, addCargo, recalc } from '../src/game/ship.js';
+import { createShip, flyShip, fireMount, updateTurrets, damageShip, destroyShip, disableShip, cargoUsed, addCargo, recalc } from '../src/game/ship.js';
 import { MODULES } from '../src/game/data.js';
 import * as Contracts from '../src/game/contracts.js';
 import * as Crew from '../src/game/crew.js';
@@ -956,6 +956,35 @@ section('OPEN SPACE');
   const all = gapAfterAKill(9);
   ok('and clearing it buys the long one', all.before === 0 && all.gap > 110,
     `${all.gap.toFixed(0)} s with the belt empty`);
+}
+{
+  // The cooldown starts when the last enemy in the sector is dealt with — and a
+  // hull with its drives ioned out has been dealt with. It counted as a live
+  // pirate, so leaving one adrift meant the belt never announced itself clear
+  // and, sitting at quota, never sent anything else either: the sector went
+  // permanently and silently dead, which is not a quiet you earned.
+  const leaveThemAdrift = (finish) => {
+    const w = new World(new Player());
+    w.player.buildShip(w);
+    w.generate();
+    let cleared = false;
+    w.log = (t) => { if (/BELT IS CLEAR/.test(t)) cleared = true; };
+    w.grace = 0;
+    w.player.ship.pos = v3(0, 0, -900);
+    for (let i = 0; i < 60 * 90; i++) w.update(1 / 60);
+    const live = w.ships.filter((x) => x.faction === 'pirate' && !x.dead);
+    for (const p of live) finish(p, w);
+    for (let i = 0; i < 60 * 200; i++) w.update(1 / 60);
+    const back = w.ships.some((x) => x.faction === 'pirate' && !x.dead && !x.disabled);
+    return { cleared, back, n: live.length };
+  };
+  const shot = leaveThemAdrift((p, w) => destroyShip(p, w, w.player.ship));
+  const ioned = leaveThemAdrift((p, w) => disableShip(p, w, w.player.ship));
+  ok('destroying the last of them starts the cooldown', shot.cleared && shot.n > 0,
+    `${shot.n} destroyed`);
+  ok('and so does ioning it, because a hulk is cargo, not an enemy', ioned.cleared,
+    `${ioned.n} left adrift`);
+  ok('and the belt comes back afterwards either way', shot.back && ioned.back);
 }
 
 /* --------------------------------------------------------------- sites */
