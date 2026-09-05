@@ -329,6 +329,21 @@ distortion, aperture grille, radial chromatic aberration and vignette.
 The HUD, radar and cockpit frame go through the same pipeline as screen-space
 segments, so they glow identically.
 
+## Key art
+
+`node tools/make-art.mjs` renders the pictures on this page, and it renders them
+with the game: the same models, the same palette, the same additive vector pass.
+Two things turn a screenshot into a photograph — the player's own hull is never
+drawn because the camera lives inside it, so posing an empty `player.ship` gives
+you a free camera; and `drawHUD` is skipped while docked, so that flag clears the
+canopy. A scene is data, and composes in the angle a thing subtends rather than
+in metres, because a hull is 5–11 m and a station is 83 and framing by eye puts
+one of them in your lap.
+
+Needs Playwright, like the browser suite. `W`, `H` and `SCALE` set the size — the
+default is 1920×1080 at 2×, so 4K. The output is not committed: 4K frames of a
+grain shader do not compress, and the repo can redraw them.
+
 ## Development
 
 ```
