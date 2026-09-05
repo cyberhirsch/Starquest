@@ -36,6 +36,35 @@ mkdirSync(OUT, { recursive: true });
  * scope, so it composes with createShip and the world's own spawners rather than
  * with anything invented here.
  */
+/*
+ * One-point perspective, and something coming down it at you. The corridor is a
+ * cylinder of rock because parallel lines are what makes a vanishing point, and
+ * it is aimed at the sector's sun so the point itself has something bright on
+ * it. Reused by both sectors — the sky does the rest.
+ */
+const CHARGE = `
+  const sun = norm(world.sector.sky.sun.dir);
+  look(mul(sun, -2600), sun, 0.02);
+  bare();                            // only what this shot puts there
+  player.ship.shield = 1e6;          // the camera is being shot at
+  corridor(12, 90, 2600, 250, 6, 56, 0.4);
+  // Eleven metres for the lead hull, and high enough in frame to stay whole:
+  // head on a ship shows its narrowest silhouette and the collision radius
+  // flatters it, so a marauder at thirty measured a tenth of the frame.
+  const line = [[11, 0.17, 0.11], [24, -0.19, -0.07], [55, 0.09, -0.06], [120, -0.05, 0.06], [260, 0.03, 0.01]];
+  const cls = ['marauder', 'corsair', 'marauder', 'corsair', 'marauder'];
+  line.forEach(([d, x, y], i) => {
+    const f = ship(cls[i], 'pirate', at(d, x, y));
+    // They are all firing down one line, so the near ones stand in the far
+    // ones' fire. Shields high enough that nobody shoots the lead hull out of
+    // the frame before the shutter opens.
+    f.shield = 1e6;
+    f.throttle = 1;                  // drives lit: they are coming, not parked
+    faceAt(f, cam.pos);
+    shoot(f, player.ship);
+  });
+`;
+
 const SCENES = [
   {
     id: 'depot',
@@ -145,6 +174,22 @@ const SCENES = [
       rocks(6, 260, 700, 14, 30, 0.6);
       rocks(4, 800, 1600, 40, 62, 0.66);
     `,
+  },
+  {
+    id: 'charge',
+    title: 'HEAD ON',
+    sector: 'halcyon',
+    settle: 0.1,                // rounds off the muzzle, none of them arrived yet
+    setup: CHARGE,
+  },
+  {
+    id: 'charge-cinder',
+    title: 'HEAD ON — CINDER REACH',
+    sector: 'cinder',
+    settle: 0.1,
+    // The same shot in the reach: a small red sun at the vanishing point, dimmer
+    // and warmer stars, and five hulls in a place where nobody is coming to help.
+    setup: CHARGE,
   },
   {
     id: 'title',
@@ -291,6 +336,32 @@ for (const scene of SCENES) {
       }
     };
 
+    /**
+     * Rock arranged as a corridor down the view axis: a ring of it at each of
+     * `steps` depths, all the same radius, so perspective does the rest and the
+     * whole thing converges on a vanishing point. Scattering rock evenly gives
+     * you a field; putting it on rings gives you somewhere to fly down.
+     */
+    const corridor = (steps, near, far, radius, small, big, jitter = 0.45) => {
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const d = near * Math.pow(far / near, t);        // log spacing reads even
+        const n = 5 + Math.round(4 * (1 - t));
+        // Size ramps with depth. One size range for the whole corridor puts
+        // sixty-metre rock a hundred metres from the lens, and the wall of the
+        // tunnel eats the shot it was supposed to frame.
+        const lo = small + (big - small) * t * 0.55;
+        const hi = lo + (big - small) * 0.45 * (0.3 + t);
+        for (let k = 0; k < n; k++) {
+          const a = (k / n) * Math.PI * 2 + i * 0.7;
+          const r = radius * (1 + (Math.random() * 2 - 1) * jitter);
+          const pos = add(cam.pos, mul(cam.fwd, d),
+            mul(cam.right, Math.cos(a) * r), mul(cam.up, Math.sin(a) * r * 0.72));
+          world.spawnAsteroid({ pos, size: lo + Math.random() * (hi - lo) });
+        }
+      }
+    };
+
     const shoot = (from, target) => {
       for (const hp of from.hardpoints) {
         const m = MODULES[hp.moduleId];
@@ -316,13 +387,24 @@ for (const scene of SCENES) {
       fireMount(from, hp, norm(sub(best.a.pos, from.pos)), world, best.a);
     };
 
+    /**
+     * Empty the sector of everything the generator scattered. A composed shot
+     * that also has the belt's own 190 rocks in it is a composed shot with
+     * confetti over it.
+     */
+    const bare = (keepShips = false) => {
+      world.asteroids.length = 0;
+      if (!keepShips) world.ships = world.ships.filter((x) => x === player.ship);
+      world.sites.length = 0;
+    };
+
     const shieldHit = (s) => world.shieldFlash(s, add(s.pos, mul(cam.right, 6), [0, 3, 0]));
     const burn = (p) => { world.explode(p, [0, 0, 0], 18, 1.2); world.sparks(p, 16, 5); };
 
     const names = ['world', 'player', 'g', 'cam', 'look', 'frame', 'at', 'ship', 'face', 'faceAt',
-      'rocks', 'shoot', 'cut', 'shieldHit', 'burn', 'add', 'sub', 'mul', 'norm', 'len', 'cross'];
+      'rocks', 'corridor', 'bare', 'shoot', 'cut', 'shieldHit', 'burn', 'add', 'sub', 'mul', 'norm', 'len', 'cross'];
     const args = [world, player, g, cam, look, frame, at, ship, face, faceAt,
-      rocks, shoot, cut, shieldHit, burn, add, sub, mul, norm, len, cross];
+      rocks, corridor, bare, shoot, cut, shieldHit, burn, add, sub, mul, norm, len, cross];
     // eslint-disable-next-line no-new-func
     new Function(...names, scene.setup)(...args);
   }, { scene });
