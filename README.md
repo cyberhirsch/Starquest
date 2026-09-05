@@ -67,10 +67,17 @@ you on a blank canvas.
 it half way and the drives trim themselves to hold half the hull's rating, rather
 than winding you up to maximum a bit more slowly. Above centre is forward, below is
 astern, double-tap to stop. Switch flight assist off and it is a plain thrust lever
-again. **FIRE** sits under it. Touch anywhere on the right half to
-place the steering stick. `MODE` swaps between the pilot and gunner seats, `TGT`
-cycles contacts, `HAIL` opens a channel to your target, `ACT` docks or boards,
-`INV` opens the loadout, `MENU` pauses and opens the flight manual.
+again. **FIRE** sits under it with **TGT** beside it, both under the same thumb —
+TGT is a combat control, so it goes with the trigger rather than across the canopy
+with the menus. Touch anywhere on the right half to place the steering stick.
+`MODE` swaps between the pilot and gunner seats, `HAIL` opens a channel to your
+target, `ACT` docks or boards, `INV` opens the loadout, `MENU` pauses and opens the
+flight manual.
+
+`TGT` goes to the nearest thing shooting at you and steps out through the rest;
+with nothing hostile on the scope it locks whatever is in the middle of the canopy
+instead, then cycles the traffic, the depot, the gate and the claims. The mining
+laser never needed a lock, so pointing and cutting still works in a fight.
 
 **Keyboard / mouse** — `W`/`S` raise and lower the speed you are holding (`X` stops,
 wheel trims) · mouse steers
@@ -229,9 +236,11 @@ activity, and the belt chatters over the open channel while you fly.
   A hull shot below a third loses drive power with it, so a fight you are winning
   ends in a catch instead of a stern chase. One that breaks off badly hurt commits
   to leaving rather than circling back, and if it reaches the buoys still running
-  it is gone for good — chase it down or let it go. Clear every pirate out of the
-  sector and it stays clear for two to three minutes: long enough to mine, scoop
-  and sell without looking over your shoulder. Shoot a licensed hull and the
+  it is gone for good — chase it down or let it go. Every hull you put down buys about half a
+  minute before the next one arrives, so a fight you are winning gets easier rather
+  than being topped straight back up to quota; clear the sector out entirely and it
+  stays clear for two to three minutes: long enough to mine, scoop and sell without
+  looking over your shoulder. Shoot a licensed hull and the
   Authority prices your head; kill a pirate and you are paid a bounty.
 - **Read the fight.** Anything that can hurt you is drawn red — your own fire
   keeps its colour and neutral traffic is dim. The name of whoever is shooting

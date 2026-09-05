@@ -34,6 +34,14 @@ const DAMAGE_WINDOW = 25;
  * promises is worse than a shorter one that always holds.
  */
 const CLEARED_QUIET = [120, 180];
+/*
+ * What one kill buys. Without it the belt topped itself back up to quota every
+ * 25-45 s, so the count only ever reached zero if you killed the last two
+ * faster than that — and in the reach, quota five, effectively never. You would
+ * fight without a pause for as long as you stayed in the sector, and the rest
+ * that clearing the belt is supposed to buy was unreachable rather than absent.
+ */
+const KILL_QUIET = [28, 42];
 
 /**
  * Shooting the depot. Charged per STATION_TICK seconds of fire rather than per
@@ -750,22 +758,35 @@ export class World {
   }
 
   /**
-   * Everything TGT will step through: contacts first because a fight is the
-   * urgent case, then the places. A sector you can be sent across needs a way
-   * to point the nose at where you were sent — the target panel's name and
-   * range is that way, so the cycle has to include somewhere to go, not only
-   * something to shoot.
+   * Everything TGT will step through, in the order you want it: whatever is
+   * shooting at you, nearest first, then the rest of the traffic, then the
+   * places. A sector you can be sent across needs a way to point the nose at
+   * where you were sent, so the cycle has to include somewhere to go — but a
+   * fight is the urgent case and the button has to answer it first.
+   *
+   * Anything not in the list at all — an asteroid you locked to mine — counts
+   * as being at position -1, so the next press lands on the nearest hostile
+   * rather than continuing from wherever you were.
    */
   cycleTarget(current) {
-    const from = this.player.ship.pos;
+    const me = this.player.ship;
+    const from = me.pos;
     const by = (x, y) => vdist2(from, x.pos) - vdist2(from, y.pos);
+    const live = this.ships.filter((s) => !s.dead && s !== me);
     const list = [
-      ...this.ships.filter((s) => !s.dead).sort(by),
+      ...live.filter((s) => this.isHostile(me, s)).sort(by),
+      ...live.filter((s) => !this.isHostile(me, s)).sort(by),
       ...[...(this.station ? [this.station] : []), ...this.gates, ...this.sites].sort(by),
     ];
     if (!list.length) return null;
     const i = list.indexOf(current);
     return list[(i + 1) % list.length];
+  }
+
+  /** Is anything actually shooting at us? Decides whether TGT is a weapon. */
+  anyHostile() {
+    const me = this.player.ship;
+    return this.ships.some((s) => !s.dead && this.isHostile(me, s));
   }
 
   onPlayerKill(ship) {
@@ -1154,9 +1175,15 @@ export class World {
     // the next one arrive twenty seconds later means the work never counted for
     // anything — there was no state you could reach where the sector was yours.
     // Now emptying it is a thing you can achieve, and it holds for a few minutes.
-    if (pirates === 0 && (this._pirates ?? 0) > 0 && this.grace <= 0) {
-      this.spawnTimer = Math.max(this.spawnTimer, rand(CLEARED_QUIET[1], CLEARED_QUIET[0]));
-      this.log('BELT IS CLEAR — NOTHING HOSTILE ON THE SCOPE', 'good');
+    if (pirates < (this._pirates ?? 0) && this.grace <= 0) {
+      // One fewer than a moment ago — killed, or it got away. Either way the
+      // belt does not answer straight back. Catches wing kills and escapes too,
+      // which is why it is counted here rather than hung off the kill signal.
+      this.spawnTimer = Math.max(this.spawnTimer, rand(KILL_QUIET[1], KILL_QUIET[0]));
+      if (pirates === 0) {
+        this.spawnTimer = Math.max(this.spawnTimer, rand(CLEARED_QUIET[1], CLEARED_QUIET[0]));
+        this.log('BELT IS CLEAR — NOTHING HOSTILE ON THE SCOPE', 'good');
+      }
     }
     this._pirates = pirates;
 

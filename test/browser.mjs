@@ -55,6 +55,33 @@ if (backend !== 'webgl2') console.log('note: screenshots will be blank — rerun
 
 check('touch controls appear on a touch device', await page.locator('#throttleBar').isVisible());
 check('fire button appears', await page.locator('#fireBtn').isVisible());
+{
+  // TGT belongs under the firing thumb on a touch device, not across the canopy
+  // with the menus — it is a combat control.
+  const [fire, tgt] = [await page.locator('#fireBtn').boundingBox(),
+    await page.locator('#tgtBtn').boundingBox()];
+  check('the target button sits beside FIRE', !!tgt && !!fire
+    && tgt.x > fire.x && tgt.x < fire.x + fire.width * 2.5
+    && Math.abs((tgt.y + tgt.height) - (fire.y + fire.height)) < 20,
+    tgt ? `FIRE at x${fire.x.toFixed(0)}, TGT at x${tgt.x.toFixed(0)}` : 'no TGT button');
+  check('and the row does not keep a second copy of it',
+    !(await page.locator('#rowTgt').isVisible()));
+
+  // ...and it goes to whatever is shooting at you, not to whatever the nose
+  // happens to be pointed at.
+  await read(() => {
+    const g = window.STARQUEST;
+    const p = g.player.ship;
+    const far = g.world.spawnPirate(); far.pos = [p.pos[0], p.pos[1], p.pos[2] - 2600];
+    const near = g.world.spawnPirate(); near.pos = [p.pos[0] + 500, p.pos[1], p.pos[2]];
+    near.name = 'NEAREST FOE';
+    g.player.target = g.world.asteroids[0];       // locked on a rock, as if mining
+  });
+  await page.locator('#tgtBtn').click();
+  await page.waitForTimeout(200);
+  const locked = await read(() => window.STARQUEST.player.target?.name);
+  check('TGT takes the closest hostile first', locked === 'NEAREST FOE', locked);
+}
 
 const bar = await page.locator('#throttleBar').boundingBox();
 const dragBar = async (frac) => {

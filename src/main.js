@@ -308,8 +308,15 @@ async function start() {
           ui.log(`FLIGHT ASSIST ${player.assist ? 'ENGAGED' : 'OFF — FULL NEWTONIAN'}`, 'info');
           break;
         case 'target': {
+          // With something hostile on the scope the button is a weapon: it goes
+          // to the nearest one first and steps through the rest, whatever the
+          // nose happens to be pointed at. Look-and-press still picks rocks and
+          // scenery out of the canopy, but only when nobody is shooting — and
+          // the mining laser never needed a lock anyway.
           qforward(_f, camQuat);
-          const picked = world.pickTarget(player.ship.pos, _f, 0.22) || world.cycleTarget(player.target);
+          const picked = world.anyHostile()
+            ? world.cycleTarget(player.target)
+            : (world.pickTarget(player.ship.pos, _f, 0.22) || world.cycleTarget(player.target));
           player.target = picked === player.ship ? world.cycleTarget(player.target) : picked;
           audio.beep(!!player.target);
           break;

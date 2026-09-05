@@ -65,7 +65,7 @@
   <div id="btnRow">
     <button class="hbtn" data-action="map" title="Flight manual &amp; pause (M)">MENU</button>
     <button class="hbtn" data-action="mode" title="Pilot / gunner (R)">MODE</button>
-    <button class="hbtn" data-action="target" title="Cycle target (T)">TGT</button>
+    <button class="hbtn" id="rowTgt" data-action="target" title="Target nearest hostile (T)">TGT</button>
     <button class="hbtn" data-action="hail" title="Hail your target (H)">HAIL</button>
     <button class="hbtn" data-action="action" title="Dock / board (F)">ACT</button>
     <button class="hbtn" data-action="inventory" title="Inventory &amp; loadout (Tab)">INV</button>
@@ -81,6 +81,7 @@
       <span class="lbl dn">REV</span>
     </div>
     <button id="fireBtn">FIRE</button>
+    <button id="tgtBtn" data-action="target" title="Target nearest hostile (T)">TGT</button>
     <div id="stickZone"></div>
     <div id="stickBase"><div id="stickKnob"></div></div>
   </div>

@@ -188,8 +188,16 @@ body.touch #threat { font-size: 10px; max-width: 46vw; }
 /* -------------------------------------------------------- touch controls */
 #touchUI { position: absolute; inset: 0; pointer-events: none; }
 body.touch #touchUI { pointer-events: none; }
-#throttleBar, #fireBtn, #stickZone { display: none; }
+#throttleBar, #fireBtn, #stickZone, #tgtBtn { display: none; }
 body.touch #throttleBar, body.touch #fireBtn, body.touch #stickZone { display: block; }
+/*
+ * On a touch device TGT belongs under the firing thumb, not at the far corner
+ * with the menus: it is a combat control, and reaching across the canopy for it
+ * mid-fight is how you get shot. The labelled row keeps its copy on desktop,
+ * where the whole row is one keyboard shortcut away anyway.
+ */
+body.touch #tgtBtn { display: block; }
+body.touch #rowTgt { display: none; }
 
 #throttleBar {
   position: absolute; left: max(12px, env(safe-area-inset-left)); top: 20%; height: 46%;
@@ -219,6 +227,15 @@ body.touch #throttleBar, body.touch #fireBtn, body.touch #stickZone { display: b
   border: 2px solid rgba(255, 194, 60, 0.55); text-shadow: 0 0 10px rgba(255, 194, 60, 0.7);
 }
 #fireBtn:active { background: radial-gradient(rgba(255, 194, 60, 0.45), rgba(60, 30, 0, 0.6)); }
+#tgtBtn {
+  position: absolute; left: calc(max(14px, env(safe-area-inset-left)) + 110px);
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 74px; height: 74px; border-radius: 50%; pointer-events: auto; touch-action: none;
+  font: inherit; font-size: 12px; letter-spacing: 0.12em; cursor: pointer;
+  color: var(--green); background: radial-gradient(rgba(108, 255, 159, 0.14), rgba(0, 30, 16, 0.5));
+  border: 2px solid rgba(108, 255, 159, 0.5); text-shadow: 0 0 10px rgba(108, 255, 159, 0.6);
+}
+#tgtBtn:active { background: radial-gradient(rgba(108, 255, 159, 0.4), rgba(0, 50, 26, 0.6)); }
 
 #stickZone { position: absolute; right: 0; top: 12%; width: 52%; height: 78%; pointer-events: auto; touch-action: none; }
 #stickBase {

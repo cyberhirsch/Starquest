@@ -5,7 +5,7 @@ import { World } from '../src/game/world.js';
 import { Player } from '../src/game/player.js';
 import { Market, sellAllOre, buyShip, buyModule, repair } from '../src/game/station.js';
 import { Boarding, boardBlocker } from '../src/game/boarding.js';
-import { createShip, flyShip, fireMount, updateTurrets, damageShip, cargoUsed, addCargo, recalc } from '../src/game/ship.js';
+import { createShip, flyShip, fireMount, updateTurrets, damageShip, destroyShip, cargoUsed, addCargo, recalc } from '../src/game/ship.js';
 import { MODULES } from '../src/game/data.js';
 import * as Contracts from '../src/game/contracts.js';
 import * as Crew from '../src/game/crew.js';
@@ -924,6 +924,40 @@ section('OPEN SPACE');
     `${nearby} pirates found you ${(vlen3(me.pos) / 1000).toFixed(0)} km out, over five minutes`);
 }
 
+{
+  // Killing one used to buy nothing at all. The belt topped itself back up to
+  // quota every 25-45 s whether you had just won a fight or not, so the count
+  // only reached zero if you killed the last two faster than the refill — and
+  // in the reach, quota five, effectively never. The break the belt owes you
+  // for clearing it was unreachable rather than absent.
+  const gapAfterAKill = (kills) => {
+    const w = new World(new Player());
+    w.player.buildShip(w);
+    w.generate();
+    w.log = () => {};
+    w.grace = 0;
+    w.player.ship.pos = v3(0, 0, -900);
+    for (let i = 0; i < 60 * 90; i++) w.update(1 / 60);   // let the belt fill
+    const live = w.ships.filter((s) => s.faction === 'pirate' && !s.dead);
+    for (const p of live.slice(0, kills)) destroyShip(p, w, w.player.ship);
+    const before = w.ships.filter((s) => s.faction === 'pirate' && !s.dead).length;
+    let gap = 0;
+    for (let i = 0; i < 60 * 200; i++) {
+      w.update(1 / 60);
+      gap = i / 60;
+      if (w.ships.filter((s) => s.faction === 'pirate' && !s.dead).length > before) break;
+    }
+    return { gap, before };
+  };
+  const one = gapAfterAKill(1);
+  ok('killing one buys a pause even with the belt still hot',
+    one.before > 0 && one.gap > 25,
+    `${one.gap.toFixed(0)} s before the next arrival, ${one.before} still on the scope`);
+  const all = gapAfterAKill(9);
+  ok('and clearing it buys the long one', all.before === 0 && all.gap > 110,
+    `${all.gap.toFixed(0)} s with the belt empty`);
+}
+
 /* --------------------------------------------------------------- sites */
 section('SITES');
 {
@@ -1023,15 +1057,22 @@ section('SITES');
   runner.hull = runner.stats.hullMax * 0.1;
   runner.target = w.player.ship;
   runner.ai = { role: 'pirate', state: 'flee', t: 0, orbit: 380, sign: 1 };
-  let secs = 0, gapWhenGone = 0;
-  for (let i = 0; i < 60 * 240 && !runner.dead; i++) {
+  let secs = 0, gapWhenGone = 0, fromCentre = 0;
+  for (let i = 0; i < 60 * 300 && !runner.dead; i++) {
     w.update(1 / 60);
     secs = i / 60;
     gapWhenGone = vdist(runner.pos, w.player.ship.pos);
+    fromCentre = vlen3(runner.pos);
   }
   ok('a beaten runner still gets away', runner.dead && runner.escaped, `after ${secs.toFixed(0)} s`);
-  ok('without the sector having to be small', secs < 90 && w.radius > 9000,
-    `${secs.toFixed(0)} s in an ${(w.radius / 1000).toFixed(0)} km sector`);
+
+  // The property that matters, and the one the shell test could not have: it is
+  // gone while still well inside an 11 km sector, because what ended the fight
+  // was breaking off from you rather than reaching an edge. Timings vary — a
+  // hull with a repair module patches itself up and turns round, restarting the
+  // clock — so this asserts where it happened, which does not.
+  ok('reaped for breaking off, not for reaching the edge', fromCentre < w.radius,
+    `${(fromCentre / 1000).toFixed(1)} km from centre in an ${(w.radius / 1000).toFixed(0)} km sector`);
   ok('and it is out of sight before it goes', gapWhenGone > 4200,
     `${(gapWhenGone / 1000).toFixed(1)} km away, past the 4.2 km draw distance`);
 }
