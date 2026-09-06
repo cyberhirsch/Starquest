@@ -560,6 +560,12 @@ export class World {
       while (this.oreAccum[key] >= 1) {
         this.oreAccum[key] -= 1;
         if (addCargo(ship, key, 1) === 0) { this.warnHoldFull(); break; }
+        // Measured at the rock, not at the ship: a claim job is about which
+        // field the ore came out of. This is the beam, which is to say it is
+        // how mining actually happens — the other two ore paths had the signal
+        // and this one did not, so a prospect contract could only be advanced
+        // by scooping loose pods and never by cutting.
+        this.onContractMine?.(key, 1, a.pos);
       }
     }
     if (a.hp <= 0) this.breakAsteroid(a, ship);

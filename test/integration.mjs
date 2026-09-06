@@ -1063,12 +1063,45 @@ section('SITES');
   Contracts.accept(w.player, job, w);
   const live = () => w.player.contracts[0];
   const site = w.siteById(job.site);
-  w.onContractMine(job.item, 5, v3(0, 0, -900));
+
+  /*
+   * Cut with a real beam rather than calling the signal by hand. The first
+   * version of this test fired w.onContractMine directly, so it asserted that
+   * the contract *would* count ore if it were told about it — and the mining
+   * laser, which is the only thing that mines, was never wired to tell it.
+   * Ninety-six units in a hundred and ten arrived silently and the job could
+   * only be advanced by scooping loose pods.
+   */
+  const cutAt = (pos, secs) => {
+    const me = w.player.ship;
+    me.hardpoints[0].moduleId = 'mining2';
+    recalc(me);
+    const rock = w.asteroids.filter((a) => a.type.ore === job.item
+      && (w.siteAt(a.pos)?.id === job.site) === (w.siteAt(pos)?.id === job.site))
+      .sort((x, y) => vdist(x.pos, pos) - vdist(y.pos, pos))[0];
+    if (!rock) return;
+    // Stand off the rock on the far side from the field's middle. A beam hits
+    // whatever is nearest along the ray rather than the rock you picked, and
+    // firing across a claim from the inside puts a dozen other rocks in the
+    // way — a shuttle's thirty-unit hold then fills with somebody else's iron
+    // and the cut stalls without the job ever seeing a unit.
+    const out = vnorm(v3(), vsub(v3(), rock.pos, pos));
+    for (let i = 0; i < 60 * secs; i++) {
+      me.pos = v3(rock.pos[0] + out[0] * 150, rock.pos[1] + out[1] * 150, rock.pos[2] + out[2] * 150);
+      me.energy = me.stats.energyMax;
+      me.cargo = {};                    // the hold is not what is under test
+      fireMount(me, me.hardpoints[0], vnorm(v3(), vsub(v3(), rock.pos, me.pos)), w, rock);
+      w.update(1 / 60);
+      if (!w.asteroids.includes(rock)) break;
+    }
+  };
+  cutAt(v3(0, 0, -900), 8);
   const inBelt = live().progress;
-  w.onContractMine(job.item, 5, site.pos);
+  cutAt(site.pos, 8);
   const atSite = live().progress;
-  ok('rock cut in the belt does not count against a claim job', inBelt === 0);
-  ok('rock cut at the claim does', atSite === 5, `${atSite}/${job.need}`);
+  ok('rock cut in the belt does not count against a claim job', inBelt === 0,
+    `${inBelt} after eight seconds on the beam in the main cluster`);
+  ok('rock cut at the claim does', atSite > 0, `${atSite}/${job.need} cut at ${job.siteName}`);
 
   // ...and carrying it to the next sector does not settle it either.
   w.jumpTo('cinder');

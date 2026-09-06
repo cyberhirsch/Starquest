@@ -29,6 +29,24 @@ export function reseed(player) {
 
 const money = (n) => Math.round(n / 50) * 50;
 
+/**
+ * What a job is worth to fly, rather than what its cargo is worth to a buyer.
+ * Two of the makers priced the cargo: an ice run and a gold run of the same
+ * size are the same rocks cut and the same trip flown, but ice is 6 cr a unit
+ * against gold's 58, so the board offered 350 cr for one and thousands for the
+ * other. Measured, the cheapest Halcyon supply job paid less than a ninth of a
+ * single pirate bounty and about fifteen seconds of mining — an insult sitting
+ * on the same board as a job worth thirty times as much.
+ *
+ * WORK_UNIT is what the hold space and the flying are worth per unit whatever
+ * is in it; a commodity dearer than that rides on top as before. FLOOR is the
+ * line below which a job should not reach the board at all.
+ */
+const WORK_UNIT = 26;
+const FLOOR = 1500;
+const perUnit = (item) => Math.max(WORK_UNIT, ITEMS[item]?.price ?? 0);
+const worth = (n) => Math.max(FLOOR, money(n));
+
 function bountyContract(world, player) {
   const count = 2 + randi(3);
   // Rough space pays better. This used to scale with the player's own threat
@@ -39,7 +57,7 @@ function bountyContract(world, player) {
     id: `c${NEXT++}`, type: 'bounty', need: count, progress: 0,
     title: `BOUNTY — ${count} PIRATE HULLS`,
     brief: `The Authority is paying a flat rate on pirate hulls destroyed anywhere in the belt. Bring back ${count}.`,
-    reward: money(count * rand(1500, 900) * tier),
+    reward: worth(count * rand(1500, 900) * tier),
     station: world.station.def.id,
   };
 }
@@ -52,12 +70,12 @@ function supplyContract(world, player) {
   // never ask for more than the hold can take in one run, or it cannot be flown
   const hold = player.ship?.stats?.cargoMax ?? 30;
   const count = Math.max(8, Math.min(20 + randi(45), Math.floor(hold * 0.8)));
-  const unit = ITEMS[item].price;
+  const unit = perUnit(item);
   return {
     id: `c${NEXT++}`, type: 'supply', need: count, progress: 0, item,
     title: `SUPPLY — ${count} ${ITEMS[item].name}`,
     brief: `${world.station.name} needs ${count} units of ${ITEMS[item].name}. Dock with them aboard and the contract settles itself.`,
-    reward: money(count * unit * rand(3.4, 2.4)),
+    reward: worth(count * unit * rand(3.4, 2.4)),
     station: world.station.def.id,
   };
 }
@@ -73,7 +91,7 @@ function courierContract(world, player) {
     to: dest.station.id, toName: dest.station.name, toSector: dest.id,
     title: `COURIER — ${dest.station.name}`,
     brief: `${units} sealed crates, loaded on acceptance, delivered to ${dest.station.name} in ${dest.name}. Do not ask what is in them.`,
-    reward: money(units * rand(1400, 900)),
+    reward: worth(units * rand(1400, 900)),
     station: world.station.def.id,
   };
 }
@@ -84,7 +102,7 @@ function salvageContract(world, player) {
     id: `c${NEXT++}`, type: 'salvage', need: count, progress: 0,
     title: `SALVAGE — BOARD ${count} ADRIFT HULL${count > 1 ? 'S' : ''}`,
     brief: `The yard wants manifests off ${count} adrift hull${count > 1 ? 's' : ''}. Board them and the paperwork follows. A breaching rig is not optional.`,
-    reward: money(count * rand(4200, 2600)),
+    reward: worth(count * rand(4200, 2600)),
     station: world.station.def.id,
   };
 }
@@ -95,7 +113,7 @@ function stripContract(world, player) {
     id: `c${NEXT++}`, type: 'strip', need: count, progress: 0,
     title: `BREAKERS — CUT UP ${count} HULL${count > 1 ? 'S' : ''}`,
     brief: `The yard wants ${count} adrift hull${count > 1 ? 's' : ''} taken down to spars, not merely emptied. Bring a cutting head.`,
-    reward: money(count * rand(6800, 4200)),
+    reward: worth(count * rand(6800, 4200)),
     station: world.station.def.id,
   };
 }
@@ -129,7 +147,7 @@ function prospectContract(world, player) {
     type: 'prospect', need: count, item, site: site.id, siteName: site.name,
     title: `PROSPECT — ${count} ${ITEMS[item].name} AT ${site.name}`,
     brief: `${site.name}: ${site.blurb} Cut ${count} units of ${ITEMS[item].name} out of that field specifically — the assay is on the claim, not on you, so rock from anywhere else does not count.`,
-    reward: money(count * ITEMS[item].price * rand(4.6, 3.4)),
+    reward: worth(count * perUnit(item) * rand(4.6, 3.4)),
   });
 }
 
@@ -142,7 +160,7 @@ function sweepContract(world, player) {
     type: 'sweep', need: count, site: site.id, siteName: site.name,
     title: `SWEEP — ${count} HULLS AT ${site.name}`,
     brief: `Crews will not work ${site.name} while it is being picked over. Put ${count} pirate hulls down inside the claim itself; kills made elsewhere are somebody else's paperwork.`,
-    reward: money(count * rand(2600, 1700) * tier),
+    reward: worth(count * rand(2600, 1700) * tier),
   });
 }
 
@@ -155,7 +173,7 @@ function recoveryContract(world, player) {
     type: 'recovery', need: count, site: site.id, siteName: site.name,
     title: `RECOVERY — ${count} HULL${count > 1 ? 'S' : ''} AT ${site.name}`,
     brief: `${site.name}: ${site.blurb} Board ${count} of them and bring the manifests back. A breaching rig is not optional.`,
-    reward: money(count * rand(5600, 3800)),
+    reward: worth(count * rand(5600, 3800)),
   });
 }
 
