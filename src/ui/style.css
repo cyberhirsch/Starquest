@@ -203,7 +203,13 @@ body.touch #threat { font-size: 10px; max-width: 46vw; }
  */
 #btnRow .hbtn { text-align: center; line-height: 1.15; padding-inline: 11px; }
 #btnRow .hbtn u { display: block; margin: 0 0 3px; padding: 0 2px; }
-body.touch .hbtn u { display: none; }
+/*
+ * No key badges on a touch device — there is no keyboard to press. The id in
+ * `#btnRow .hbtn u` outranks a plain `body.touch .hbtn u`, so the row kept
+ * showing its badges on a phone and stood fifteen pixels taller than every
+ * other button because of it.
+ */
+body.touch .hbtn u, body.touch #btnRow .hbtn u { display: none; }
 .hbtn.hot { border-color: var(--amber); color: var(--amber); }
 
 /* -------------------------------------------------------- touch controls */
@@ -248,15 +254,17 @@ body.touch #rowTgt { display: none; }
   border: 2px solid rgba(255, 194, 60, 0.55); text-shadow: 0 0 10px rgba(255, 194, 60, 0.7);
 }
 #fireBtn:active { background: radial-gradient(rgba(255, 194, 60, 0.45), rgba(60, 30, 0, 0.6)); }
+/*
+ * TGT is a labelled button like the ones in the row, not a second thumb pad: it
+ * is pressed between bursts rather than held, so it wants to look like MENU and
+ * MODE and sit out of the way. It just happens to live beside FIRE, because
+ * that is where the thumb already is.
+ */
 #tgtBtn {
-  position: absolute; left: calc(max(14px, env(safe-area-inset-left)) + 110px);
-  bottom: max(20px, env(safe-area-inset-bottom));
-  width: 74px; height: 74px; border-radius: 50%; pointer-events: auto; touch-action: none;
-  font: inherit; font-size: 12px; letter-spacing: 0.12em; cursor: pointer;
-  color: var(--green); background: radial-gradient(rgba(108, 255, 159, 0.14), rgba(0, 30, 16, 0.5));
-  border: 2px solid rgba(108, 255, 159, 0.5); text-shadow: 0 0 10px rgba(108, 255, 159, 0.6);
+  position: absolute; left: calc(max(14px, env(safe-area-inset-left)) + 108px);
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 33px);
+  pointer-events: auto; touch-action: none;
 }
-#tgtBtn:active { background: radial-gradient(rgba(108, 255, 159, 0.4), rgba(0, 50, 26, 0.6)); }
 
 #stickZone { position: absolute; right: 0; top: 12%; width: 52%; height: 78%; pointer-events: auto; touch-action: none; }
 #stickBase {

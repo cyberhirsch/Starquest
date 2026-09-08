@@ -74,10 +74,13 @@ with the menus. Touch anywhere on the right half to place the steering stick.
 target, `ACT` docks or boards, `INV` opens the loadout, `MENU` pauses and opens the
 flight manual.
 
-`TGT` goes to the nearest thing shooting at you and steps out through the rest;
-with nothing hostile on the scope it locks whatever is in the middle of the canopy
-instead, then cycles the traffic, the depot, the gate and the claims. The mining
-laser never needed a lock, so pointing and cutting still works in a fight.
+`TGT` is a weapon in a fight and a nav tool out of one. With anything hostile on
+the scope it cycles hostiles and nothing else, nearest first, whatever the lock
+was sitting on — the depot and every gate carry their own HUD marker anyway, so
+you can still find them without locking one. With the belt quiet it locks
+whatever is in the middle of the canopy, then steps through the traffic, the
+depot, the gate and the claims. The mining laser never needed a lock, so pointing
+and cutting still works in a fight.
 
 **Keyboard / mouse** — `W`/`S` raise and lower the speed you are holding (`X` stops,
 wheel trims) · mouse steers

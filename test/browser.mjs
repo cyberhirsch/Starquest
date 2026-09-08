@@ -58,14 +58,22 @@ check('fire button appears', await page.locator('#fireBtn').isVisible());
 {
   // TGT belongs under the firing thumb on a touch device, not across the canopy
   // with the menus — it is a combat control.
-  const [fire, tgt] = [await page.locator('#fireBtn').boundingBox(),
-    await page.locator('#tgtBtn').boundingBox()];
+  const [fire, tgt, row] = [await page.locator('#fireBtn').boundingBox(),
+    await page.locator('#tgtBtn').boundingBox(),
+    await page.locator('#btnRow .hbtn').first().boundingBox()];
   check('the target button sits beside FIRE', !!tgt && !!fire
-    && tgt.x > fire.x && tgt.x < fire.x + fire.width * 2.5
-    && Math.abs((tgt.y + tgt.height) - (fire.y + fire.height)) < 20,
-    tgt ? `FIRE at x${fire.x.toFixed(0)}, TGT at x${tgt.x.toFixed(0)}` : 'no TGT button');
+    && tgt.x > fire.x + fire.width * 0.8 && tgt.x < fire.x + fire.width * 2
+    && tgt.y > fire.y && tgt.y + tgt.height < fire.y + fire.height,
+    tgt ? `FIRE ${fire.width.toFixed(0)}px at x${fire.x.toFixed(0)}, TGT ${tgt.width.toFixed(0)}px at x${tgt.x.toFixed(0)}` : 'no TGT button');
+  // and is one of the labelled buttons, not a second thumb pad
+  check('and is a labelled button like the row', !!row && Math.abs(tgt.height - row.height) < 4,
+    `${tgt.height.toFixed(0)}px tall against the row's ${row ? row.height.toFixed(0) : '?'}px`);
   check('and the row does not keep a second copy of it',
     !(await page.locator('#rowTgt').isVisible()));
+  // No key badges on a phone: there is no keyboard, and an id selector was
+  // quietly outranking the rule that hides them.
+  check('and no key badges on a touch device',
+    !(await page.locator('#btnRow .hbtn u').first().isVisible()));
 
   // ...and it goes to whatever is shooting at you, not to whatever the nose
   // happens to be pointed at.

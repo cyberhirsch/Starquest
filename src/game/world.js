@@ -779,14 +779,24 @@ export class World {
     const from = me.pos;
     const by = (x, y) => vdist2(from, x.pos) - vdist2(from, y.pos);
     const live = this.ships.filter((s) => !s.dead && s !== me);
+    const foes = live.filter((s) => this.isHostile(me, s)).sort(by);
     const list = [
-      ...live.filter((s) => this.isHostile(me, s)).sort(by),
+      ...foes,
       ...live.filter((s) => !this.isHostile(me, s)).sort(by),
       ...[...(this.station ? [this.station] : []), ...this.gates, ...this.sites].sort(by),
     ];
     if (!list.length) return null;
-    const i = list.indexOf(current);
-    return list[(i + 1) % list.length];
+    // With something hostile up the button cycles hostiles and nothing else,
+    // nearest first. Stepping on from wherever the lock happened to be meant
+    // that having targeted the depot earlier, a press in a fight handed you the
+    // gate: the cycle was in order, and the order was not what the button is
+    // for. The places are still findable while you fight — the depot and every
+    // gate carry their own HUD marker whether or not they are locked — so the
+    // only thing this costs is locking one mid-fight, and the only thing it
+    // buys is that the button does what its name says when it matters.
+    const ring = foes.length ? foes : list;
+    const i = ring.indexOf(current);
+    return ring[(i + 1) % ring.length];
   }
 
   /** Is anything actually shooting at us? Decides whether TGT is a weapon. */

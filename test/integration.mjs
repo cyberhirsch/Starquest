@@ -1031,12 +1031,27 @@ section('SITES');
   ok('and the belt is still the belt', belt.length > 180 && iceBelt < 0.35,
     `${belt.length} rocks in the main cluster, ${(iceBelt * 100).toFixed(0)}% ice`);
 
-  // You have to be able to find it.
+  // You have to be able to find it — out of a fight, where TGT is a nav tool.
+  // In one it cycles hostiles only, which is asserted below.
+  for (const s of [...w.ships]) if (w.isHostile(w.player.ship, s)) w.ships.splice(w.ships.indexOf(s), 1);
   let t = null; const seen = new Set();
   for (let i = 0; i < 60; i++) { t = w.cycleTarget(t); if (!t) break; seen.add(t.name || t.kind); }
   ok('TGT will step through the places, not only the ships',
     w.sites.every((x) => seen.has(x.name)) && seen.has(w.station.name),
     `${w.sites.length} claims, the depot and the gate are all on the cycle`);
+
+  // ...and in a fight it is a weapon: the nearest thing shooting at you, every
+  // press, whatever the lock happened to be sitting on.
+  w.player.ship.pos = v3(0, 0, 0);
+  const near = w.spawnPirate(); near.pos = v3(0, 0, -500); near.ai = null;
+  const far = w.spawnPirate(); far.pos = v3(0, 0, -2600); far.ai = null;
+  ok('and in a fight it goes to the nearest hostile from a cold start',
+    w.cycleTarget(null) === near, `${w.cycleTarget(null)?.name} at 500 m`);
+  ok('and from a lock on the far side of the sector',
+    w.cycleTarget(w.station) === near && w.cycleTarget(w.sites[0]) === near);
+  ok('and steps between hostiles rather than out into the scenery',
+    w.cycleTarget(near) === far && w.cycleTarget(far) === near,
+    'two pirates, and the cycle stays on them');
 }
 {
   // A wreck field has wrecks in it, or the job that sends you there is fiction.
