@@ -96,9 +96,11 @@ hangs up. On a touch device the key badges are hidden, because there is no keybo
 to press.
 
 The pointer is the game's own — a green outline arrow, drawn like everything else,
-amber over anything you can press. It disappears over the canopy: flying, the mouse
-is the stick and the reticle already says where you are pointed. It comes back the
-moment you are on a panel or docked.
+amber over anything you can press — and it goes by mode. Flying, there is no pointer
+at all: the mouse is the stick, the reticle already says where the nose is pointed,
+and every button on the HUD carries its key. Open a menu and it is there — a station
+screen, the manual, a hail — and opening one also lets go of a captured mouse, so
+there is a real pointer to use on it.
 
 ## Getting started
 

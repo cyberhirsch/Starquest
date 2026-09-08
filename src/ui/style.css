@@ -16,19 +16,24 @@
  * stays readable over the lit panels. A cursor cannot carry a CSS glow, so the
  * halo is a second wider stroke in the file rather than a shadow.
  *
- * It is hidden over the canvas. Flying, the mouse IS the stick and the reticle
- * says where you are pointed — an arrow sitting on top of that is a second,
- * lying reticle. Over anything you can press it comes back, in amber; a row
- * you cannot afford drops back to green, which is the same thing its dimmed
- * text already says.
+ * It belongs to menus, and it goes by mode rather than by whatever it happens
+ * to be over. Flying, there is no pointer at all: the mouse IS the stick, the
+ * reticle already says where the nose is pointed, and every button on the HUD
+ * carries its key. Open anything you read or press — a station screen, the
+ * manual, a hail — and it is there, amber over anything you can press, green
+ * again on a row you cannot afford, which is the same thing its dimmed text
+ * already says. The class is put on the body by UI.syncPointer(), which also
+ * lets go of a captured mouse so the browser has one to give back.
  */
 :root {
   --cursor: url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2226%22%20height=%2226%22%20viewBox=%220%200%2026%2026%22><path%20d=%22M3%202%20L3%2019.4%20L7.7%2015%20L10.7%2021.6%20L13.8%2020.1%20L10.8%2013.7%20L17.2%2013.5%20Z%22%20fill=%22none%22%20stroke=%22rgba(0,10,6,0.85)%22%20stroke-width=%224.2%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22/><path%20d=%22M3%202%20L3%2019.4%20L7.7%2015%20L10.7%2021.6%20L13.8%2020.1%20L10.8%2013.7%20L17.2%2013.5%20Z%22%20fill=%22rgba(0,18,10,0.6)%22%20stroke=%22%236cff9f%22%20stroke-width=%221.5%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22/></svg>") 3 2, default;
   --cursor-hot: url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2226%22%20height=%2226%22%20viewBox=%220%200%2026%2026%22><path%20d=%22M3%202%20L3%2019.4%20L7.7%2015%20L10.7%2021.6%20L13.8%2020.1%20L10.8%2013.7%20L17.2%2013.5%20Z%22%20fill=%22none%22%20stroke=%22rgba(14,8,0,0.85)%22%20stroke-width=%224.2%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22/><path%20d=%22M3%202%20L3%2019.4%20L7.7%2015%20L10.7%2021.6%20L13.8%2020.1%20L10.8%2013.7%20L17.2%2013.5%20Z%22%20fill=%22rgba(0,18,10,0.6)%22%20stroke=%22%23ffc23c%22%20stroke-width=%221.5%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22/></svg>") 3 2, pointer;
 }
-body { cursor: var(--cursor); }
-#gl { cursor: none; }
-button, .item, .tab { cursor: var(--cursor-hot); }
+body { cursor: none; }
+button { cursor: inherit; }              /* the UA sheet gives buttons `default` */
+body.menu { cursor: var(--cursor); }
+body.menu button, body.menu .item, body.menu .tab { cursor: var(--cursor-hot); }
+body.menu .item.locked { cursor: var(--cursor); }
 
 html, body {
   margin: 0; padding: 0; height: 100%; overflow: hidden;
@@ -340,7 +345,7 @@ body.touch #rowTgt { display: none; }
 .item .qty { color: var(--amber); }
 .item .price { color: var(--green); }
 .item .sub { display: block; color: var(--dim); font-size: 10px; text-transform: none; letter-spacing: 0.02em; margin-top: 2px; }
-.item.locked { opacity: 0.45; cursor: var(--cursor); }
+.item.locked { opacity: 0.45; }
 .item.empty { border-style: dashed; color: var(--dim); }
 
 h3 { font-size: 11px; color: var(--dim); letter-spacing: 0.2em; margin: 0 0 8px; font-weight: 500; }

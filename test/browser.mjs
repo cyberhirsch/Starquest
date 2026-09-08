@@ -54,23 +54,36 @@ console.log(`backend: ${backend}`);
 if (backend !== 'webgl2') console.log('note: screenshots will be blank — rerun with GFX=webgl to capture frames');
 
 {
-  // Flying, the mouse is the stick and the reticle says where you are pointed;
-  // an arrow on top of that is a second reticle telling a different story.
+  // The pointer goes by mode, not by whatever it happens to be over. Flying
+  // there is none at all; open anything you read or press and it is there.
   const cur = (sel) => page.evaluate((q) => {
     const e = document.querySelector(q);
     return e ? getComputedStyle(e).cursor : 'no element';
   }, sel);
-  check('the pointer is hidden over the canvas', (await cur('#gl')) === 'none');
-  const btn = await cur('#btnRow .hbtn');
-  check('and is the game\'s own over anything you can press', /^url\("data:image\/svg/.test(btn),
-    btn.slice(0, 30));
-  await read(() => window.STARQUEST.ui.open('station'));
+  check('flying, there is no pointer over the canopy', (await cur('#gl')) === 'none');
+  check('and none over the HUD either', (await cur('#btnRow .hbtn')) === 'none',
+    await cur('#btnRow .hbtn'));
+
+  // Broke: nothing in the game ever called exitPointerLock, so pressing M with
+  // the mouse captured gave you a menu and no pointer to use on it.
+  const released = await read(() => {
+    let calls = 0;
+    Object.defineProperty(document, 'pointerLockElement', { value: {}, configurable: true });
+    document.exitPointerLock = () => { calls++; };
+    window.STARQUEST.ui.open('station');
+    Object.defineProperty(document, 'pointerLockElement', { value: null, configurable: true });
+    return calls;
+  });
+  check('opening a menu lets go of a captured mouse', released === 1, `${released} call(s)`);
+
   await until(() => !!document.querySelector('#overlay .screen'));
   const over = await cur('#overlay');
-  check('and comes back when you dock', over !== 'none' && /^url\("data:image\/svg/.test(over),
+  check('and hands the pointer back', over !== 'none' && /^url\("data:image\/svg/.test(over),
     over.slice(0, 30));
-  // Broke: with no money every hull on the forecourt is locked, and a row you
-  // cannot take should not wear the pointer that says press me.
+  check('amber over anything you can press',
+    (await cur('.tab')) !== over && /^url\("data:image\/svg/.test(await cur('.tab')));
+  // With no money every hull on the forecourt is locked, and a row you cannot
+  // take should not wear the pointer that says press me.
   const purse = await read(() => window.STARQUEST.player.credits);
   await read(() => { window.STARQUEST.player.credits = 0; window.STARQUEST.ui.tab = 'shipyard'; });
   await read(() => window.STARQUEST.ui.render());
@@ -79,6 +92,30 @@ if (backend !== 'webgl2') console.log('note: screenshots will be blank — rerun
   check('and a hull you cannot afford does not offer itself', dim === over, dim.slice(0, 30));
   await page.evaluate((cr) => { window.STARQUEST.ui.close(); window.STARQUEST.player.credits = cr; }, purse);
   await until(() => !window.STARQUEST.ui.isOpen);
+  check('closing it takes the pointer away again', (await cur('body')) === 'none');
+
+  // A hail is a menu too, and it is up while you are still flying.
+  await read(() => {
+    const g = window.STARQUEST;
+    const foe = g.world.spawnPirate();
+    foe.pos = [...g.player.ship.pos];
+    foe.pos[2] -= 300;
+    g.player.target = foe;
+    g.ui.openComms(foe);
+  });
+  await until(() => window.STARQUEST.ui.commsOpen);
+  check('a hail brings it back while you fly', (await cur('body')) !== 'none',
+    (await cur('body')).slice(0, 30));
+  await read(() => window.STARQUEST.ui.closeComms());
+  await until(() => !window.STARQUEST.ui.commsOpen);
+  check('and hanging up takes it away', (await cur('body')) === 'none');
+  await read(() => {
+    const g = window.STARQUEST;
+    for (let i = g.world.ships.length - 1; i >= 0; i--) {
+      if (g.world.ships[i].faction === 'pirate') g.world.ships.splice(i, 1);
+    }
+    g.player.target = null;
+  });
 }
 
 {

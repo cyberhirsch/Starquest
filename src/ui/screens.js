@@ -214,12 +214,14 @@ export class UI {
     this.commsTarget = target;
     this.el.comms.classList.remove('hidden');
     this.drawComms(state);
+    this.syncPointer();
   }
 
   closeComms() {
     this.commsTarget = null;
     this.commsOpts = [];
     this.el.comms.classList.add('hidden');
+    this.syncPointer();
   }
 
   /** A pick from the channel, or the close button. */
@@ -324,6 +326,7 @@ export class UI {
     if (name === 'inventory') this.tab = opts.tab || 'loadout';
     this.overlay.classList.remove('hidden');
     this.render();
+    this.syncPointer();
     this.game.onOverlayChange?.(true);
   }
 
@@ -331,7 +334,21 @@ export class UI {
     this.screen = null;
     this.overlay.classList.add('hidden');
     this.overlay.innerHTML = '';
+    this.syncPointer();
     this.game.onOverlayChange?.(false);
+  }
+
+  /**
+   * The pointer belongs to menus. Flying, there is none: the mouse is the
+   * stick and every button on the HUD carries its key. Opening anything you
+   * read or press brings it back — and lets go of a captured mouse, because
+   * nothing here ever called exitPointerLock, so pressing M in flight with the
+   * mouse held gave you a menu and no pointer to use on it.
+   */
+  syncPointer() {
+    const menu = this.isOpen || this.commsOpen;
+    document.body.classList.toggle('menu', menu);
+    if (menu && document.pointerLockElement) document.exitPointerLock?.();
   }
 
   render() {
