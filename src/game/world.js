@@ -14,6 +14,7 @@ import {
   addCargo, cargoFree, recalc, salvagePool,
 } from './ship.js';
 import { runAI, inTruce } from './ai.js';
+import { peaceful } from './tutorial.js';
 
 /** How far a sector reaches when its definition does not say. */
 export const SECTOR_R = 5200;
@@ -245,7 +246,11 @@ export class World {
 
     for (let i = 0; i < def.asteroids; i++) this.spawnAsteroid();
     this.sites = (def.sites || []).map((sd) => this.buildSite(sd));
-    this.spawnPirate(true);          // one, and it starts far away
+    // One, and it starts far away — but not while the tutorial still has the
+    // belt quiet. A pilot on the second card has a cannon they have not been
+    // shown and no idea that running is allowed; the tutorial sends the first
+    // hostile hull itself, when it is ready to explain it.
+    if (!peaceful(this.player)) this.spawnPirate(true);
     for (let i = 0; i < Math.round(2 * def.traders); i++) this.spawnTrader();
     for (let i = 0; i < def.miners; i++) this.spawnMiner();
     for (let i = 0; i < def.derelicts; i++) this.spawnDerelict();
@@ -465,6 +470,27 @@ export class World {
     addCargo(s, pick(['iron', 'ice', 'silicon']), randi(30) + 8);
     s.ai = { role: 'miner', state: 'seek', t: 0 };
     this.ships.push(s);
+    return s;
+  }
+
+  /**
+   * The hull the tutorial sends: the first one a new pilot ever has to answer.
+   * Nothing about it is rolled. A shuttle with one pulse gun and no shield is
+   * a fight a starter cannon wins, and it arrives 2.6 km out so it is on the
+   * scope for half a minute before it is a problem — long enough to read the
+   * card, lock it, and decide.
+   */
+  sendRaider() {
+    const s = createShip('shuttle', 'pirate', {
+      pos: this.nearPlayerPoint(v3(), 2600),
+      loadout: { hardpoints: ['pulse', null, null], utility: [null, null, null] },
+      credits: Math.round(rand(1400, 600)),
+      name: 'SALT WIDOW',
+    });
+    addCargo(s, 'iron', 4);
+    s.ai = { role: 'pirate', state: 'hunt', t: 0, orbit: 380, sign: 1, evade: false };
+    this.ships.push(s);
+    this.log('CONTACT — HOSTILE HULL CLOSING', 'danger');
     return s;
   }
 
@@ -1189,7 +1215,7 @@ export class World {
     // meant the belt never announced itself clear and, being at quota, never
     // sent anything else either: the sector went permanently, silently dead.
     const pirates = this.ships.filter((s) => s.faction === 'pirate' && !s.dead && !s.disabled).length;
-    const want = this.grace > 0 ? 0
+    const want = (this.grace > 0 || peaceful(this.player)) ? 0
       : Math.round((2 + Math.floor(this.sector?.danger ?? 0)) * (this.sector?.pirates ?? 1));
 
     // Clearing the belt buys a real rest. Fighting to the last hull only to have

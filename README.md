@@ -103,8 +103,15 @@ moment you are on a panel or docked.
 ## Getting started
 
 A short tutorial walks the first flight — throttle, steering, locking a rock, cutting
-ore, scooping pods, docking, selling, and fitting your first auto-turret. It shows one
-objective at a time and can be skipped from the card or the manual.
+ore, scooping pods, docking, selling, your first fight, and fitting an auto-turret. It
+shows one objective at a time and can be skipped from the card or the manual.
+
+The belt holds its fire until that fight. Nothing hostile is in the sector while you
+are learning which way is up, and the raider that ends the quiet is one the tutorial
+sends itself, once you have sold your first hold and undocked: a shuttle with a single
+gun, arriving 2.6 km out so it is on the scope long before it is a problem. Kill it,
+buy it off over the radio, or turn for the depot — the card says so, and all three
+count. Skipping the tutorial hands the belt straight back.
 
 The game saves itself every 30 seconds, when you dock, when a tutorial step completes,
 and whenever the page is hidden or closed — so swiping the app away does not cost you

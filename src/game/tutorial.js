@@ -2,6 +2,7 @@
 
 import { vlen } from '../core/math.js';
 import { MODULES, ORES } from './data.js';
+import { inTruce } from './ai.js';
 
 const oreInHold = (ship) =>
   Object.entries(ship.cargo).reduce((n, [id, q]) => n + (ORES[id] ? q : 0), 0);
@@ -61,6 +62,29 @@ const STEPS = [
     done: (g) => oreInHold(g.player.ship) === 0 && g.player.stats.earned > 0,
   },
   {
+    // The first hostile hull a new pilot sees. The belt is held quiet until
+    // here (see `peaceful`), because the old opening sent one on a 75-second
+    // timer: you could be jumped while still working out which way was up, by
+    // a ship nobody had introduced and with no card telling you that turning
+    // for the depot is allowed. Now the fight is taught, and it is the
+    // tutorial that starts it.
+    id: 'raider',
+    title: 'SOMETHING ON THE SCOPE',
+    touch: 'A raider is closing on you. Tap TGT to lock it, tap 1 on the weapon strip to man the cannon, and hold FIRE. Or turn for the depot — running is a real answer.',
+    keys: 'A raider is closing on you. Press T to lock it, 1 to man the cannon, and hold Space. Or turn for the depot — running is a real answer.',
+    // Not while they are still docked. The sale that brings this card up
+    // happens at the market, and docking is what counts as running from the
+    // fight — so sending the hull a frame after the sale would have started
+    // the fight and settled it in the same breath, with the player standing in
+    // the shop. It waits until they are back outside.
+    enter: (g, st) => {
+      if (g.player.docked) return false;
+      st.raider = g.world.sendRaider();
+      return true;
+    },
+    done: (g, st) => st.settled(g),
+  },
+  {
     // A full shuttle hold of iron sells for about 4,800, so the old jump
     // straight from the first sale to a 6,500 cr turret left the card sitting
     // there with no way to satisfy it and no hint that another run was needed.
@@ -79,12 +103,43 @@ const STEPS = [
   },
 ];
 
+/** The step that sends the first raider — everything before it is peacetime. */
+const FIGHT = STEPS.findIndex((s) => s.id === 'raider');
+
+/**
+ * Is the belt still holding its fire? True while a pilot is being walked
+ * through flying, cutting and selling, and through the scripted fight itself
+ * so nothing else piles in on top of it. The director asks this before it
+ * sends anything, and so does the sector build. Skipping the tutorial ends it,
+ * which is the point of skipping it.
+ */
+export const peaceful = (player) => {
+  const t = player?.tutorial;
+  return !!t && !t.done && t.step <= FIGHT;
+};
+
 export class Tutorial {
   constructor(player) {
     this.player = player;
     this.state = player.tutorial || (player.tutorial = { step: 0, done: false });
     this.turned = 0;
     this.shown = -1;
+    this.entered = -1;
+    this.raider = null;
+  }
+
+  /**
+   * Is the first fight over? Won, or the hull gave up, or it never caught you.
+   * Docking counts, because the card says running is a real answer and a
+   * tutorial that only accepts a kill would be lying about that — and so does
+   * buying it off over the radio, which is a whole answer the game offers and
+   * would otherwise have left the card stuck on screen for good.
+   */
+  settled(g) {
+    const r = this.raider;
+    if (!r) return false;
+    return r.dead || r.disabled || !g.world.ships.includes(r)
+      || inTruce(r, g.world) || !!g.player.docked;
   }
 
   get active() { return !this.state.done && this.state.step < STEPS.length; }
@@ -102,6 +157,12 @@ export class Tutorial {
     this.turned += (Math.abs(ship.rate[0]) + Math.abs(ship.rate[1])) * dt;
 
     const step = this.step;
+    // A step that has to make something happen does it once, on arrival — and
+    // again after a reload, since a fight you never finished is still ahead of
+    // you and the hull that was sent is long gone.
+    if (step.enter && this.entered !== this.state.step) {
+      if (step.enter(g, this) !== false) this.entered = this.state.step;
+    }
     if (step.done(g, this)) {
       this.state.step++;
       this.player.save();

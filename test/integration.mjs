@@ -10,6 +10,7 @@ import { MODULES } from '../src/game/data.js';
 import * as Contracts from '../src/game/contracts.js';
 import * as Crew from '../src/game/crew.js';
 import * as Comms from '../src/game/comms.js';
+import { Tutorial } from '../src/game/tutorial.js';
 import { SECTORS } from '../src/game/sectors.js';
 import { v3, vsub, vnorm, vdist, vlen as vlen3, qlook, leadTarget } from '../src/core/math.js';
 
@@ -20,7 +21,13 @@ const ok = (name, cond, extra = '') => {
 };
 const section = (t) => console.log(`\n${t}`);
 
-const player = new Player();
+// Everything below flies a licensed pilot. The belt holds its fire until the
+// tutorial has sent the first raider itself, so a world built around a fresh
+// Player() never turns hostile — which is the point, and is tested on its own
+// further down with a fresh one.
+const Pilot = () => { const p = new Player(); p.tutorial = { step: 99, done: true }; return p; };
+
+const player = Pilot();
 const world = new World(player);
 player.buildShip(world);
 world.generate();
@@ -600,7 +607,7 @@ section('REGRESSIONS');
   // Beams billed per frame, so a 120 Hz phone mined twice as fast for free.
   const rig = (hz) => {
     const s = createShip('prospector', 'civilian', { loadout: { hardpoints: ['mining1'], utility: [] } });
-    const w = new World(new Player());
+    const w = new World(Pilot());
     w.player.ship = s; w.ships.push(s);
     s.pos = v3(0, 0, 0); s.energy = 1e6;
     const rock = w.spawnAsteroid({ pos: v3(0, 0, -300), size: 40 });
@@ -618,12 +625,123 @@ section('REGRESSIONS');
 }
 {
   // The tutorial jumped from a ~4,800 cr first sale to a 6,500 cr turret.
-  const t = new (await import('../src/game/tutorial.js')).Tutorial(new Player());
+  const t = new Tutorial(new Player());
   const ids = [];
   while (t.active) { ids.push(t.step.id); t.state.step++; }
   ok('the tutorial funds the turret before asking for it',
     ids.indexOf('earn') > ids.indexOf('sell') && ids.indexOf('earn') < ids.indexOf('turret'),
     ids.join(' -> '));
+}
+
+/* -------------------------------------------------------- the first fight */
+section('OPENING');
+{
+  // The belt turned hostile on a 75-second timer whether or not the pilot had
+  // been shown which button fires, so the first hull a new player ever met
+  // arrived unannounced while the second card still read COME ABOUT. It is the
+  // tutorial's job to introduce it now, and until then nothing is sent.
+  const w = new World(new Player());
+  w.player.buildShip(w);
+  w.generate();
+  w.log = () => {};
+  const foes = (x = w) => x.ships.filter((s) => s.faction === 'pirate' && !s.dead);
+  ok('a new pilot starts the sector alone', foes().length === 0);
+  w.grace = 0;                                   // the old guard, switched off
+  for (let i = 0; i < 60 * 300; i++) w.update(1 / 60);
+  ok('and is left alone while the tutorial teaches the loop', foes().length === 0,
+    `${foes().length} arrived over five minutes with the grace period off`);
+}
+{
+  const p = new Player();
+  const w = new World(p);
+  p.buildShip(w);
+  w.generate();
+  w.log = () => {};
+  const g = { player: p, world: w };
+  const foes = () => w.ships.filter((s) => s.faction === 'pirate' && !s.dead);
+  const t = new Tutorial(p);
+  while (t.step.id !== 'raider') t.state.step++;
+  ok('the sale is what brings it', t.step.title === 'SOMETHING ON THE SCOPE');
+
+  // Broke: the sale that brings this card up happens at the market, and
+  // docking is what counts as running from the fight — so the hull was sent
+  // and the step settled in the same breath, with the player still in the shop.
+  p.docked = true;
+  t.update(g, 1 / 60);
+  ok('nothing is sent while you are still in the shop', foes().length === 0 && t.step.id === 'raider',
+    `${foes().length} on the scope, on ${t.step.id}`);
+
+  p.docked = false;
+  t.update(g, 1 / 60);
+  ok('and the tutorial sends it itself once you are outside', foes().length === 1,
+    `${foes().length} on the scope`);
+  const r = foes()[0];
+  const guns = r.hardpoints.filter((h) => h.moduleId).length;
+  ok('one a starter cannon can beat', r.classId === 'shuttle' && guns === 1
+    && r.utility.every((u) => !u), `${r.cls.name}, ${guns} gun, ${r.utility.filter(Boolean).length} utility`);
+  const gap = vdist(r.pos, p.ship.pos);
+  ok('arriving far enough out to see it coming', gap > 2000, `${(gap / 1000).toFixed(1)} km`);
+
+  // A reload lands on the same unfinished step, and the hull that was sent is
+  // long gone — so the fight is set up again rather than waited for forever.
+  const reloaded = new Tutorial(p);
+  reloaded.update(g, 1 / 60);
+  ok('a reload mid-fight does not strand you waiting for a hull that is gone',
+    foes().length === 2 && reloaded.raider !== r);
+
+  for (const f of foes()) destroyShip(f, w, p.ship);
+  t.update(g, 1 / 60);
+  ok('killing it moves the tutorial on', t.step.id === 'earn', t.step.id);
+
+  w.grace = 0; w.spawnTimer = 0;
+  w.director(0.1);
+  ok('and the belt is live behind it', foes().length > 0, `${foes().length} on the scope`);
+}
+{
+  // Paying one off is a whole answer the game offers — HAIL, hand over a
+  // tribute, they leave you alone. Counting only a kill would have left the
+  // card on screen for the rest of the save.
+  const p = Pilot();
+  const w = new World(p);
+  p.buildShip(w);
+  w.generate();
+  w.log = () => {};
+  p.tutorial = { step: 0, done: false };
+  const g = { player: p, world: w };
+  const t = new Tutorial(p);
+  while (t.step.id !== 'raider') t.state.step++;
+  t.update(g, 1 / 60);
+  t.raider.paidOff = w.time;                      // bought off over the radio
+  t.update(g, 1 / 60);
+  ok('and buying it off over the radio counts too', t.step.id === 'earn', t.step.id);
+}
+{
+  // The card says running is a real answer, and a tutorial that only accepted
+  // a kill would be lying about that.
+  const p = new Player();
+  const w = new World(p);
+  p.buildShip(w);
+  w.generate();
+  w.log = () => {};
+  const g = { player: p, world: w };
+  const t = new Tutorial(p);
+  while (t.step.id !== 'raider') t.state.step++;
+  t.update(g, 1 / 60);
+  p.docked = true;                                // turned for the depot instead
+  t.update(g, 1 / 60);
+  ok('or turning for the depot does', t.step.id === 'earn', t.step.id);
+}
+{
+  const p = new Player();
+  const w = new World(p);
+  p.buildShip(w);
+  w.generate();
+  w.log = () => {};
+  new Tutorial(p).skip();
+  w.grace = 0; w.spawnTimer = 0;
+  w.director(0.1);
+  ok('and skipping the tutorial hands the belt straight back',
+    w.ships.some((s) => s.faction === 'pirate' && !s.dead));
 }
 
 /* ---------------------------------------------------------- readability */
@@ -699,7 +817,7 @@ section('LEGIBILITY');
   // earlier version of this rule used a distance margin no ship could ever
   // reach, because the boundary's pull balances a hull's drives about 100 m out
   // — and a test that placed the ship by hand passed anyway.
-  const w2 = new World(new Player());
+  const w2 = new World(Pilot());
   w2.player.buildShip(w2);
   w2.generate();
   const bolter = w2.spawnPirate();
@@ -721,7 +839,7 @@ section('THE DEPOT');
 {
   // The depot used to be scenery. Rounds went straight through it, hulls flew
   // through the middle of it, and shooting it cost nothing and said nothing.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate();
   w.grace = 9999;
@@ -772,7 +890,7 @@ section('THE DEPOT');
     w.station.market.banUntil === left, `${(w.station.market.banUntil - w.time).toFixed(0)}s still to go`);
 
   // A turret round straying into it is not a crime — you did not aim it.
-  const st2 = new World(new Player());
+  const st2 = new World(Pilot());
   st2.player.buildShip(st2); st2.generate(); st2.log = () => {};
   const before = st2.player.wanted;
   st2.hitStructure(st2.station, v3(...st2.station.pos),
@@ -782,7 +900,7 @@ section('THE DEPOT');
 {
   // Making the station solid must not wall the player out of the two things
   // that need you to get close to something.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate();
   const me = w.player.ship, st = w.station;
@@ -811,7 +929,7 @@ section('EVASION');
   const shootAt = (evade) => {
     let shots = 0, dealt = 0;
     for (let r = 0; r < 6; r++) {
-      const w = new World(new Player());
+      const w = new World(Pilot());
       w.player.buildShip(w);
       w.generate();
       w.grace = 9999;
@@ -849,7 +967,7 @@ section('EVASION');
 
   // Who can fly is decided per pilot from the region's own figure, so a belt
   // has a mix rather than a switch that flips for everyone at once.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate();
   w.log = () => {};
@@ -878,7 +996,7 @@ section('OPEN SPACE');
   // leave, and a pilot who flies in a straight line for three minutes without
   // ever firing back is one the belt kills often enough to drown the answer —
   // which is correct behaviour, and a different fact.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate();
   w.grace = 1e9;
@@ -911,7 +1029,7 @@ section('OPEN SPACE');
   // pirates a few km off the player wherever the player happens to be, which
   // would have meant flying out to look at the stars and being ambushed by a
   // belt that is nowhere near you.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate();
   w.grace = 0;
@@ -937,7 +1055,7 @@ section('OPEN SPACE');
   // in the reach, quota five, effectively never. The break the belt owes you
   // for clearing it was unreachable rather than absent.
   const gapAfterAKill = (kills) => {
-    const w = new World(new Player());
+    const w = new World(Pilot());
     w.player.buildShip(w);
     w.generate();
     w.log = () => {};
@@ -970,7 +1088,7 @@ section('OPEN SPACE');
   // and, sitting at quota, never sent anything else either: the sector went
   // permanently and silently dead, which is not a quiet you earned.
   const leaveThemAdrift = (finish) => {
-    const w = new World(new Player());
+    const w = new World(Pilot());
     w.player.buildShip(w);
     w.generate();
     let cleared = false;
@@ -999,7 +1117,7 @@ section('SITES');
   // Jumping the second gate ends the demo, and a sector that is one belt with
   // one station has nowhere to send you: every job the board could write said
   // "anywhere in the belt", which describes work but never a destination.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate();
   w.log = () => {};
@@ -1067,7 +1185,7 @@ section('SITES');
 }
 {
   // A wreck field has wrecks in it, or the job that sends you there is fiction.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate('cinder');
   w.log = () => {};
@@ -1077,7 +1195,7 @@ section('SITES');
 }
 {
   // The point of a job that names a place: it only counts in that place.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate();
   w.log = () => {};
@@ -1146,7 +1264,7 @@ section('SITES');
   // A runner is gone when it has broken off from you, not when it crosses a
   // shell: the shell test worked while every sector was 5.2 km across and left
   // a beaten pirate on the scope for a minute and a half once one was 11 km.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate('cinder');
   w.log = () => {};
@@ -1200,7 +1318,7 @@ section('REGIONS');
   // score, so four things stepped up on the same kill and buying the ship you
   // had saved for made the sector you were standing in measurably worse.
   const look = (kills, ship) => {
-    const p = new Player();
+    const p = Pilot();
     p.stats.kills = kills;
     p.wanted = kills * 200;
     if (ship) {
@@ -1233,7 +1351,7 @@ section('REGIONS');
     `${fresh.guns.toFixed(2)} guns per hull against a tier-0 standard of 1`);
 
   // Progression is going somewhere rougher, not outgrowing where you are.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate('cinder');
   w.log = () => {};
@@ -1249,7 +1367,7 @@ section('DIRECTOR');
   // Clearing the belt used to buy about twenty seconds: the director only knew
   // how many pirates it wanted, not that you had just earned an empty sector,
   // so there was no state you could reach where the work counted for anything.
-  const w = new World(new Player());
+  const w = new World(Pilot());
   w.player.buildShip(w);
   w.generate();
   w.grace = 0;

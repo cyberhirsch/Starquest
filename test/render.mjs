@@ -14,6 +14,7 @@ import {
 const W = 1600, H = 900;
 const proj = m4(), view = m4(), viewProj = m4();
 const player = new Player();
+player.tutorial = { step: 99, done: true };   // the belt is quiet until the tutorial says otherwise
 const world = new World(player);
 player.buildShip(world);
 world.generate();

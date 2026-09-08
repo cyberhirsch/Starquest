@@ -81,6 +81,49 @@ if (backend !== 'webgl2') console.log('note: screenshots will be blank — rerun
   await until(() => !window.STARQUEST.ui.isOpen);
 }
 
+{
+  // The belt used to turn hostile on a timer, so the first hull a new player
+  // ever met arrived while the second card still read COME ABOUT. Nothing is
+  // sent until the tutorial sends it, and then it says what it is.
+  check('a new pilot starts the sector alone',
+    (await read(() => window.STARQUEST.world.ships.filter((s) => s.faction === 'pirate' && !s.dead).length)) === 0);
+  const wasOn = await read(() => {
+    const g = window.STARQUEST;
+    const at = g.tutorial.state.step;
+    while (g.tutorial.step && g.tutorial.step.id !== 'raider') g.tutorial.state.step++;
+    g.tutorial.entered = -1;
+    return at;
+  });
+  const sent = await until(() => window.STARQUEST.world.ships
+    .some((s) => s.faction === 'pirate' && !s.dead));
+  check('and the tutorial brings the first fight to them', sent,
+    await page.locator('#objTitle').textContent());
+  check('with a card that says what to do about it',
+    /raider/i.test(await page.locator('#objBody').textContent())
+    && /running is a real answer/i.test(await page.locator('#objBody').textContent()));
+  check('and a contact warning in the log',
+    [...await page.locator('#log div').allTextContents()].some((t) => /HOSTILE HULL CLOSING/.test(t)));
+  await read(() => {
+    for (const s of window.STARQUEST.world.ships) if (s.faction === 'pirate') { s.hull = 0; s.dead = true; }
+  });
+  check('and it moves on once the fight is over',
+    await until(() => window.STARQUEST.tutorial.step?.id === 'earn'),
+    await page.locator('#objTitle').textContent());
+  // Put back what this borrowed. Left at step 8 the later tutorial check passed
+  // for the wrong reason — it asks whether the throttle step advanced, and any
+  // step past it answers yes.
+  await page.evaluate((at) => {
+    const g = window.STARQUEST;
+    g.tutorial.state.step = at;
+    g.tutorial.state.done = false;
+    g.tutorial.entered = -1;
+    g.tutorial.raider = null;
+    for (let i = g.world.ships.length - 1; i >= 0; i--) {
+      if (g.world.ships[i].faction === 'pirate') g.world.ships.splice(i, 1);
+    }
+  }, wasOn);
+}
+
 check('touch controls appear on a touch device', await page.locator('#throttleBar').isVisible());
 check('fire button appears', await page.locator('#fireBtn').isVisible());
 {
