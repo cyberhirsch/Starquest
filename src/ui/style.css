@@ -201,7 +201,7 @@ body.touch #threat { font-size: 10px; max-width: 46vw; }
  * the hull bars at 1280 and below; stacked, the row is exactly as wide as it was
  * before the keys existed and merely a line taller, which is free space.
  */
-#btnRow .hbtn { text-align: center; line-height: 1.15; padding-inline: 11px; }
+#btnRow .hbtn, #tgtBtn { text-align: center; line-height: 1.15; padding-inline: 11px; }
 #btnRow .hbtn u { display: block; margin: 0 0 3px; padding: 0 2px; }
 /*
  * No key badges on a touch device — there is no keyboard to press. The id in
@@ -392,7 +392,7 @@ body.touch #btnRow {
   bottom: max(12px, env(safe-area-inset-bottom)); right: max(12px, env(safe-area-inset-right));
   flex-wrap: nowrap; max-width: 52vw;
 }
-body.touch #btnRow .hbtn { padding: 9px 9px; font-size: 10px; }
+body.touch #btnRow .hbtn, body.touch #tgtBtn { padding: 9px 9px; font-size: 10px; }
 body.touch #weapons { bottom: 74px; }
 body.touch #vitals { bottom: 102px; min-width: 200px; }
 body.touch #prompt { top: 22%; }

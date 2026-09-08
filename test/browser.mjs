@@ -66,8 +66,12 @@ check('fire button appears', await page.locator('#fireBtn').isVisible());
     && tgt.y > fire.y && tgt.y + tgt.height < fire.y + fire.height,
     tgt ? `FIRE ${fire.width.toFixed(0)}px at x${fire.x.toFixed(0)}, TGT ${tgt.width.toFixed(0)}px at x${tgt.x.toFixed(0)}` : 'no TGT button');
   // and is one of the labelled buttons, not a second thumb pad
-  check('and is a labelled button like the row', !!row && Math.abs(tgt.height - row.height) < 4,
-    `${tgt.height.toFixed(0)}px tall against the row's ${row ? row.height.toFixed(0) : '?'}px`);
+  // Exactly the row's height, not close to it. It missed the two rules scoped
+  // to `#btnRow .hbtn` — the touch font size and padding — and stood a pixel
+  // and a half taller with a bigger label than every button beside it.
+  check('and is a labelled button the same size as the row',
+    !!row && Math.abs(tgt.height - row.height) < 1,
+    `${tgt.height.toFixed(1)}px tall against the row's ${row ? row.height.toFixed(1) : '?'}px`);
   check('and the row does not keep a second copy of it',
     !(await page.locator('#rowTgt').isVisible()));
   // No key badges on a phone: there is no keyboard, and an id selector was
