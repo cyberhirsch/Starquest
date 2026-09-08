@@ -53,6 +53,34 @@ console.log(`backend: ${backend}`);
 // so that is the backend to take pictures on.
 if (backend !== 'webgl2') console.log('note: screenshots will be blank — rerun with GFX=webgl to capture frames');
 
+{
+  // Flying, the mouse is the stick and the reticle says where you are pointed;
+  // an arrow on top of that is a second reticle telling a different story.
+  const cur = (sel) => page.evaluate((q) => {
+    const e = document.querySelector(q);
+    return e ? getComputedStyle(e).cursor : 'no element';
+  }, sel);
+  check('the pointer is hidden over the canvas', (await cur('#gl')) === 'none');
+  const btn = await cur('#btnRow .hbtn');
+  check('and is the game\'s own over anything you can press', /^url\("data:image\/svg/.test(btn),
+    btn.slice(0, 30));
+  await read(() => window.STARQUEST.ui.open('station'));
+  await until(() => !!document.querySelector('#overlay .screen'));
+  const over = await cur('#overlay');
+  check('and comes back when you dock', over !== 'none' && /^url\("data:image\/svg/.test(over),
+    over.slice(0, 30));
+  // Broke: with no money every hull on the forecourt is locked, and a row you
+  // cannot take should not wear the pointer that says press me.
+  const purse = await read(() => window.STARQUEST.player.credits);
+  await read(() => { window.STARQUEST.player.credits = 0; window.STARQUEST.ui.tab = 'shipyard'; });
+  await read(() => window.STARQUEST.ui.render());
+  await until(() => !!document.querySelector('#overlay .item.locked'));
+  const dim = await cur('#overlay .item.locked');
+  check('and a hull you cannot afford does not offer itself', dim === over, dim.slice(0, 30));
+  await page.evaluate((cr) => { window.STARQUEST.ui.close(); window.STARQUEST.player.credits = cr; }, purse);
+  await until(() => !window.STARQUEST.ui.isOpen);
+}
+
 check('touch controls appear on a touch device', await page.locator('#throttleBar').isVisible());
 check('fire button appears', await page.locator('#fireBtn').isVisible());
 {
@@ -89,10 +117,14 @@ check('fire button appears', await page.locator('#fireBtn').isVisible());
     near.name = 'NEAREST FOE';
     g.player.target = g.world.asteroids[0];       // locked on a rock, as if mining
   });
+  // The press is queued and acted on in the next frame, and software rendering
+  // here can take longer to produce one than any fixed wait is worth: measured,
+  // a 200ms pause missed the frame about twice in twenty-four, and the click
+  // itself had landed in full every time. Wait for the lock, not for the clock.
   await page.locator('#tgtBtn').click();
-  await page.waitForTimeout(200);
+  await until(() => window.STARQUEST.player.target?.name === 'NEAREST FOE');
   const locked = await read(() => window.STARQUEST.player.target?.name);
-  check('TGT takes the closest hostile first', locked === 'NEAREST FOE', locked);
+  check('TGT takes the closest hostile first', locked === 'NEAREST FOE', locked ?? 'nothing locked');
 }
 
 const bar = await page.locator('#throttleBar').boundingBox();

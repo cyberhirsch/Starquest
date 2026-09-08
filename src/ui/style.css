@@ -10,6 +10,26 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/*
+ * The pointer is drawn the way everything else is: an outline, not a filled
+ * shape, in the HUD's own green, with a dark halo stroked underneath so it
+ * stays readable over the lit panels. A cursor cannot carry a CSS glow, so the
+ * halo is a second wider stroke in the file rather than a shadow.
+ *
+ * It is hidden over the canvas. Flying, the mouse IS the stick and the reticle
+ * says where you are pointed — an arrow sitting on top of that is a second,
+ * lying reticle. Over anything you can press it comes back, in amber; a row
+ * you cannot afford drops back to green, which is the same thing its dimmed
+ * text already says.
+ */
+:root {
+  --cursor: url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2226%22%20height=%2226%22%20viewBox=%220%200%2026%2026%22><path%20d=%22M3%202%20L3%2019.4%20L7.7%2015%20L10.7%2021.6%20L13.8%2020.1%20L10.8%2013.7%20L17.2%2013.5%20Z%22%20fill=%22none%22%20stroke=%22rgba(0,10,6,0.85)%22%20stroke-width=%224.2%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22/><path%20d=%22M3%202%20L3%2019.4%20L7.7%2015%20L10.7%2021.6%20L13.8%2020.1%20L10.8%2013.7%20L17.2%2013.5%20Z%22%20fill=%22rgba(0,18,10,0.6)%22%20stroke=%22%236cff9f%22%20stroke-width=%221.5%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22/></svg>") 3 2, default;
+  --cursor-hot: url("data:image/svg+xml,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2226%22%20height=%2226%22%20viewBox=%220%200%2026%2026%22><path%20d=%22M3%202%20L3%2019.4%20L7.7%2015%20L10.7%2021.6%20L13.8%2020.1%20L10.8%2013.7%20L17.2%2013.5%20Z%22%20fill=%22none%22%20stroke=%22rgba(14,8,0,0.85)%22%20stroke-width=%224.2%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22/><path%20d=%22M3%202%20L3%2019.4%20L7.7%2015%20L10.7%2021.6%20L13.8%2020.1%20L10.8%2013.7%20L17.2%2013.5%20Z%22%20fill=%22rgba(0,18,10,0.6)%22%20stroke=%22%23ffc23c%22%20stroke-width=%221.5%22%20stroke-linejoin=%22round%22%20stroke-linecap=%22round%22/></svg>") 3 2, pointer;
+}
+body { cursor: var(--cursor); }
+#gl { cursor: none; }
+button, .item, .tab { cursor: var(--cursor-hot); }
+
 html, body {
   margin: 0; padding: 0; height: 100%; overflow: hidden;
   background: var(--bg); color: var(--green);
@@ -180,7 +200,7 @@ body.touch #threat { font-size: 10px; max-width: 46vw; }
 .hbtn {
   pointer-events: auto; font: inherit; font-size: 11px; letter-spacing: 0.1em;
   color: var(--green); background: rgba(0, 26, 15, 0.6);
-  border: 1px solid rgba(108, 255, 159, 0.4); padding: 9px 13px; cursor: pointer;
+  border: 1px solid rgba(108, 255, 159, 0.4); padding: 9px 13px;
   text-transform: uppercase; text-shadow: 0 0 8px rgba(108, 255, 159, 0.5);
   transition: background 0.1s, color 0.1s;
 }
@@ -249,7 +269,7 @@ body.touch #rowTgt { display: none; }
 #fireBtn {
   position: absolute; left: max(14px, env(safe-area-inset-left)); bottom: max(20px, env(safe-area-inset-bottom));
   width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none;
-  font: inherit; font-size: 13px; letter-spacing: 0.12em; cursor: pointer;
+  font: inherit; font-size: 13px; letter-spacing: 0.12em;
   color: var(--amber); background: radial-gradient(rgba(255, 194, 60, 0.16), rgba(40, 20, 0, 0.5));
   border: 2px solid rgba(255, 194, 60, 0.55); text-shadow: 0 0 10px rgba(255, 194, 60, 0.7);
 }
@@ -300,7 +320,7 @@ body.touch #rowTgt { display: none; }
 .screen > header .meta b { color: var(--green); }
 .tabs { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
 .tab {
-  font: inherit; font-size: 11px; padding: 7px 12px; cursor: pointer; color: var(--dim);
+  font: inherit; font-size: 11px; padding: 7px 12px; color: var(--dim);
   background: transparent; border: 1px solid rgba(108, 255, 159, 0.22); text-transform: uppercase;
 }
 .tab.on { color: #001a0d; background: var(--green); border-color: var(--green); }
@@ -312,7 +332,7 @@ body.touch #rowTgt { display: none; }
 .item {
   display: flex; align-items: center; gap: 10px; padding: 7px 9px;
   border: 1px solid rgba(108, 255, 159, 0.16); background: rgba(0, 30, 18, 0.35);
-  font-size: 11.5px; cursor: pointer;
+  font-size: 11.5px;
 }
 .item:hover { border-color: rgba(108, 255, 159, 0.5); background: rgba(0, 46, 27, 0.5); }
 .item.on { border-color: var(--amber); }
@@ -320,7 +340,7 @@ body.touch #rowTgt { display: none; }
 .item .qty { color: var(--amber); }
 .item .price { color: var(--green); }
 .item .sub { display: block; color: var(--dim); font-size: 10px; text-transform: none; letter-spacing: 0.02em; margin-top: 2px; }
-.item.locked { opacity: 0.45; cursor: not-allowed; }
+.item.locked { opacity: 0.45; cursor: var(--cursor); }
 .item.empty { border-style: dashed; color: var(--dim); }
 
 h3 { font-size: 11px; color: var(--dim); letter-spacing: 0.2em; margin: 0 0 8px; font-weight: 500; }

@@ -95,6 +95,11 @@ channel while it is open (they go back to picking mounts when it closes) and `Es
 hangs up. On a touch device the key badges are hidden, because there is no keyboard
 to press.
 
+The pointer is the game's own — a green outline arrow, drawn like everything else,
+amber over anything you can press. It disappears over the canopy: flying, the mouse
+is the stick and the reticle already says where you are pointed. It comes back the
+moment you are on a panel or docked.
+
 ## Getting started
 
 A short tutorial walks the first flight — throttle, steering, locking a rock, cutting
