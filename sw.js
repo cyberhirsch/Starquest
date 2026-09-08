@@ -54,6 +54,19 @@ self.addEventListener('activate', (e) => {
 // Network first, cache as the fallback. Cache-first served the build before
 // last on every launch, which made shipped fixes look like they had not
 // shipped; the cache is still complete, so the game runs with no signal at all.
+//
+// Two things about the fallback, both of which broke it entirely offline:
+//
+// caches.match() keys on the whole URL, query string included, so a launch at
+// index.html?gfx=webgl missed a cache holding index.html and the page failed to
+// load at all — with a complete cache sitting right there. ignoreSearch fixes
+// that, and every query this game uses (?gfx=) picks a code path rather than a
+// document.
+//
+// And anything that still misses falls back to the shell if it is a navigation.
+// A home screen icon can open the scope root, a deep link, or a URL with a
+// fragment; they are all the same single page, and refusing one of them offline
+// is the difference between an installed game and a bookmark.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
@@ -61,6 +74,9 @@ self.addEventListener('fetch', (e) => {
     fetch(req).then((res) => {
       if (res && res.ok) caches.open(VERSION).then((c) => c.put(req, res.clone()));
       return res;
-    }).catch(() => caches.match(req).then((hit) => hit || Promise.reject(new Error('offline')))),
+    }).catch(() => caches.match(req, { ignoreSearch: true })
+      .then((hit) => hit
+        || (req.mode === 'navigate' ? caches.match('index.html') : null)
+        || Promise.reject(new Error('offline')))),
   );
 });

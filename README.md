@@ -332,6 +332,20 @@ distortion, aperture grille, radial chromatic aberration and vignette.
 The HUD, radar and cockpit frame go through the same pipeline as screen-space
 segments, so they glow identically.
 
+## Offline
+
+Installed, the game is fully offline: the service worker downloads the whole
+shell — every module, the icons, the manifest, 38 files — on first visit, and
+after that a launch needs no network at all. `npm run test:offline` proves it by
+loading the game, pulling the network out and asking whether it comes back, from
+the link you installed from, from the scope root a home-screen icon opens, and
+from a cold start with no worker running.
+
+That test exists because counting cached files proved nothing: the cache was
+complete and the game still would not start, because `caches.match()` keys on
+the whole URL and a launch at `index.html?gfx=webgl` missed a cache holding
+`index.html`.
+
 ## Key art
 
 `node tools/make-art.mjs` renders the pictures on this page, and it renders them
