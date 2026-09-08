@@ -495,8 +495,14 @@ section('REGRESSIONS');
   damageShip(pirate, 4, world, { from: player.ship, manual: true });
   ok('nor does one round of your own', pirate.paidOff !== null,
     `${Math.round(pirate.truceHits)} of ${Math.round(pirate.stats.hullMax * 0.08)} allowed`);
+  // Patch it up first. The three blows above come to about seventy per cent of
+  // the hull between them, and spawnPirate picks the class, so on a lighter one
+  // the last shot killed the ship this line is about — and a dead pirate never
+  // gets its truce voided. It failed roughly one run in twenty that way.
+  pirate.hull = pirate.stats.hullMax;
   damageShip(pirate, pirate.stats.hullMax * 0.2, world, { from: player.ship, manual: true });
-  ok('shooting them in earnest does', pirate.paidOff === null);
+  ok('shooting them in earnest does', pirate.paidOff === null && !pirate.dead,
+    pirate.dead ? 'the test killed it' : `${Math.round(pirate.truceHits)} hits taken`);
   pirate.dead = true;
 }
 {
