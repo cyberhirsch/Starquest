@@ -1017,16 +1017,22 @@ section('SITES');
 
   const rocks = at('shoal');
   const iceHere = share(rocks, 'ice'), iceBelt = share(belt, 'ice');
-  ok('a claim is made of the rock it is named for', rocks.length > 40 && iceHere > iceBelt * 2,
+  ok('a claim is made of the rock it is named for',
+    rocks.length > 40 && iceHere > 0.4 && iceHere > iceBelt * 2,
     `${(iceHere * 100).toFixed(0)}% ice at THE COLD SHOAL against ${(iceBelt * 100).toFixed(0)}% in the belt`);
 
   // The one that actually needed fixing. A multiplier on the sector's mix
   // cannot make a rare ore dominant — 2.4x on platinum, base weight 8 against
   // iron's 34, measured 20% — so the claim named for platinum was an iron field
   // with a platinum name, and the job that sent you there was fiction.
+  // Against a sampled belt share and a multiplier, the noisy denominator does
+  // the deciding: 190 belt rocks put platinum anywhere from 6% to 9%, and four
+  // times that moves the bar by a tenth of the frame. A share of the claim and
+  // a looser multiple both have to hold, which still fails the thing this was
+  // written for — a claim that came out 20% platinum against a 7% belt.
   const hard = at('anvil');
   const platHere = share(hard, 'platinum'), platBelt = share(belt, 'platinum');
-  ok('including a claim named for a rare one', platHere > platBelt * 4,
+  ok('including a claim named for a rare one', platHere > 0.25 && platHere > platBelt * 3,
     `${(platHere * 100).toFixed(0)}% platinum at TANNER'S ANVIL against ${(platBelt * 100).toFixed(0)}% in the belt`);
   ok('and the belt is still the belt', belt.length > 180 && iceBelt < 0.35,
     `${belt.length} rocks in the main cluster, ${(iceBelt * 100).toFixed(0)}% ice`);
@@ -1087,7 +1093,7 @@ section('SITES');
    * Ninety-six units in a hundred and ten arrived silently and the job could
    * only be advanced by scooping loose pods.
    */
-  const cutAt = (pos, secs) => {
+  const cutAt = (pos, secs, until) => {
     const me = w.player.ship;
     me.hardpoints[0].moduleId = 'mining2';
     recalc(me);
@@ -1108,12 +1114,17 @@ section('SITES');
       fireMount(me, me.hardpoints[0], vnorm(v3(), vsub(v3(), rock.pos, me.pos)), w, rock);
       w.update(1 / 60);
       if (!w.asteroids.includes(rock)) break;
+      if (until && until()) break;
     }
   };
   cutAt(v3(0, 0, -900), 8);
   const inBelt = live().progress;
-  cutAt(site.pos, 8);
-  const atSite = live().progress;
+  // Stop at the first unit the claim credits. Eight seconds on a MK II cuts
+  // more than most of these jobs ask for, so the contract paid out and left
+  // player.contracts empty — and the next line read .progress off nothing and
+  // took the whole suite down with it, about six runs in ten.
+  cutAt(site.pos, 8, () => (live()?.progress ?? 0) > 0);
+  const atSite = live()?.progress ?? job.need;
   ok('rock cut in the belt does not count against a claim job', inBelt === 0,
     `${inBelt} after eight seconds on the beam in the main cluster`);
   ok('rock cut at the claim does', atSite > 0, `${atSite}/${job.need} cut at ${job.siteName}`);
@@ -1122,7 +1133,8 @@ section('SITES');
   w.jumpTo('cinder');
   w.onContractMine(job.item, 5, v3(...site.pos));
   ok('and the claim does not follow you through the gate',
-    w.player.contracts[0].progress === atSite, `${w.player.contracts[0].progress}/${job.need}`);
+    (w.player.contracts[0]?.progress ?? job.need) === atSite,
+    `${w.player.contracts[0]?.progress ?? 'settled'}/${job.need}`);
 }
 {
   // A runner is gone when it has broken off from you, not when it crosses a
