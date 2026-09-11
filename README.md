@@ -127,26 +127,40 @@ it and it ships nowhere near the service worker's shell. It imports the game's
 own models, palette and line shaders and adds one pass on top, so what you are
 looking at is the real renderer with fog in it rather than a mock-up.
 
-Three ways to put the wires into the dust, switchable live so their cost is a
-number rather than an argument:
+Fog and dust are one medium: a density field with knots in it, an extinction
+coefficient in reciprocal metres, and an albedo splitting what it scatters from
+what it simply takes. Nothing is drawn on top — no bloom, no CRT, no post at
+all, just exposure and a clamp, because the point is to see the light rather
+than the glow around it.
 
-* **ANALYTIC** — closed form. In fog of even density the light a view ray picks
-  up from a point source falls off as 1/r² along its whole length, and that
-  integral solves exactly: with `h` the ray's closest approach and `s0` the
-  distance along the ray to it, `(atan((far-s0)/h) + atan(s0/h)) / h`. One sqrt
-  and two atans per light per pixel. No marching, no banding, and it is inverse
-  square because the maths is, not because a curve was tuned to look like it.
-  Smooth, and with nothing in the dust to see.
-* **MARCHED** — walks the ray instead, so the dust can have structure and the
-  falloff exponent becomes a slider. The honest one and the expensive one:
-  steps × lights per pixel.
-* **HYBRID** — the analytic glow, shaped by a short density-only march.
+Two ways to light the medium, switchable live so their cost is a number rather
+than an argument:
+
+* **CLOSED FORM** — exact and free of marching. In a medium of even density the
+  light a view ray picks up from a point source falls off as 1/r² along its
+  whole length, and that integral solves: with `h` the ray's closest approach
+  and `s0` the distance along the ray to it, `(atan((far-s0)/h) + atan(s0/h))/h`.
+  One sqrt and two atans per light per pixel. What it cannot do is absorb —
+  extinction inside that integral has no elementary form, and structure in the
+  medium has none at all. The reference, not the answer.
+* **MARCHED** — walks the ray carrying transmittance, so the medium both
+  scatters and absorbs: a bank lights up on its near side and shadows what is
+  behind it. Steps × lights per pixel, and the honest one.
+
+The wires are dimmed by what they are seen through. This renderer has no depth
+buffer — lines are additive and everything shows through everything — so there
+is no per-pixel distance for a screen-space pass to attenuate against. There is
+one per segment, though, and segments are few where pixels are many: the
+transmittance march lives in the vertex shader, six taps from the eye to each
+end of the line, interpolated across the quad. Overlapping segments at different
+depths each get their own, which per-pixel nearest-depth could not do anyway.
 
 Run it with `npm start` and open `/lab/nebula.html`. Drag to look, `W`/`S` for
-speed, `1`-`3` for the mode, `F` for fog on and off, `H`/`C` for the two sector
-presets, `SPACE` to put a cutting beam in the dust. The readout gives frame time
-and the light count; run it on real hardware, because software rendering will
-report whatever it likes.
+speed, `1`/`2` for the mode, `F` for the medium on and off, `H`/`C` for the two
+sector presets, `SPACE` to put a cutting beam in it. The readout gives frame
+time, σ, the optical depth over the draw distance and what fraction of a wire at
+that range still reaches you; run it on real hardware, because software
+rendering will report whatever it likes.
 
 ## A region has a character
 

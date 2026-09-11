@@ -38,36 +38,36 @@
 
 <div id="panel">
   <h1>NEBULA LAB</h1>
-  <p class="sub">The reach, with the wires lighting the dust. Nothing here touches the game.</p>
+  <p class="sub">One medium. The wires light it, it absorbs what passes through it, and\n    nothing is drawn on top &mdash; no bloom, no CRT, no post at all.</p>
 
   <div class="row" id="modes"></div>
   <div class="row" id="presets"></div>
 
-  <fieldset><legend>FOG</legend>
-    <label><span class="n">density</span><input id="density" type="range" min="0" max="4" step="0.01"><span class="v"></span></label>
-    <label><span class="n">gain</span><input id="gain" type="range" min="0" max="6" step="0.01"><span class="v"></span></label>
-    <label><span class="n">falloff</span><input id="falloff" type="range" min="1" max="3.4" step="0.05"><span class="v"></span></label>
-    <label><span class="n">extinction</span><input id="ext" type="range" min="0" max="3" step="0.01"><span class="v"></span></label>
-  </fieldset>
-
-  <fieldset><legend>NEBULA</legend>
-    <label><span class="n">amount</span><input id="namt" type="range" min="0" max="1" step="0.01"><span class="v"></span></label>
+  <fieldset><legend>MEDIUM</legend>
+    <label><span class="n">density</span><input id="density" type="range" min="0" max="6" step="0.01"><span class="v"></span></label>
+    <label><span class="n">albedo</span><input id="albedo" type="range" min="0" max="1" step="0.01"><span class="v"></span></label>
+    <label><span class="n">structure</span><input id="namt" type="range" min="0" max="1" step="0.01"><span class="v"></span></label>
     <label><span class="n">scale</span><input id="nscale" type="range" min="0.2" max="6" step="0.05"><span class="v"></span></label>
     <label><span class="n">drift</span><input id="nspeed" type="range" min="0" max="3" step="0.01"><span class="v"></span></label>
-    <label><span class="n">ambient</span><input id="namb" type="range" min="0" max="1.2" step="0.01"><span class="v"></span></label>
   </fieldset>
 
   <fieldset><legend>LIGHTS</legend>
     <div class="row" id="src"></div>
+    <label><span class="n">gain</span><input id="gain" type="range" min="0" max="6" step="0.01"><span class="v"></span></label>
+    <label><span class="n">falloff</span><input id="falloff" type="range" min="1" max="3.4" step="0.05"><span class="v"></span></label>
     <label><span class="n">count</span><input id="lcount" type="range" min="1" max="64" step="1"><span class="v"></span></label>
+  </fieldset>
+
+  <fieldset><legend>VIEW</legend>
+    <label><span class="n">exposure</span><input id="exposure" type="range" min="0.1" max="4" step="0.01"><span class="v"></span></label>
     <label><span class="n">steps</span><input id="steps" type="range" min="4" max="96" step="1"><span class="v"></span></label>
-    <label><span class="n">res</span><input id="scale" type="range" min="0.25" max="1" step="0.05"><span class="v"></span></label>
+    <label><span class="n">fog res</span><input id="scale" type="range" min="0.25" max="1" step="0.05"><span class="v"></span></label>
   </fieldset>
 </div>
 
 <div id="hud"></div>
 <div id="keys">
-  <u>1</u>-<u>3</u> mode · <u>F</u> fog on/off · <u>H</u>/<u>C</u> preset · <u>SPACE</u> cut a rock ·
+  <u>1</u>/<u>2</u> mode · <u>F</u> fog on/off · <u>H</u>/<u>C</u> preset · <u>SPACE</u> cut a rock ·
   <u>drag</u> look · <u>W</u>/<u>S</u> speed · <u>P</u> panel
 </div>
 <div id="err"></div>
@@ -76,7 +76,7 @@
 import { LineBatch } from '../src/render/lines.js';
 import { MODELS, ASTEROID_SHAPES } from '../src/render/models.js';
 import { C } from '../src/render/palette.js';
-import { LINE_VS, LINE_FS, FULLSCREEN_VS, BRIGHT_FS, BLUR_FS, COMPOSITE_FS } from '../src/render/shaders_gl.js';
+import { LINE_VS, LINE_FS, FULLSCREEN_VS } from '../src/render/shaders_gl.js';
 import { v3, m4, m4perspective, m4view, m4mul, qid, qaxis, qmul, qnorm, qrot, qlook, clamp } from '../src/core/math.js';
 
 const fail = (msg) => { const e = document.getElementById('err'); e.style.display = 'block'; e.textContent = msg; };
@@ -162,19 +162,12 @@ const MAXL = 64;
  * where nearly all the light is, modulated by a short march that only samples
  * density. Structure where the eye looks for it, closed form everywhere else.
  */
-const VOL_FS = `#version 300 es
-precision highp float;
-uniform vec3 uCam, uRight, uUp, uFwd;
-uniform float uAspect, uTanH, uFar, uTime;
-uniform vec4 uLp[${MAXL}];        // xyz light position, w intensity
-uniform vec4 uLc[${MAXL}];        // rgb colour, a softening radius
-uniform int uCount, uMode, uSteps;
-uniform float uDensity, uGain, uFalloff, uExt;
-uniform float uNoiseAmt, uNoiseScale, uNoiseSpeed, uAmbient;
-uniform vec3 uNeb;
-in vec2 vUv;
-out vec4 fragColor;
-
+// One medium, shared by everything that needs to know where it is thick: the
+// volumetric pass that lights it, and the line shader that has to be dimmed by
+// it. Same function, same coordinates, or a bank of dust would glow in one pass
+// and not occlude in the other.
+const NOISE_GLSL = `
+uniform float uNAmt, uNScale, uNSpeed, uNTime;
 float hash(vec3 p) {
   p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419));
   p *= 17.0;
@@ -193,100 +186,89 @@ float fbm(vec3 p) {
   for (int i = 0; i < 3; i++) { s += a * vnoise(p); p *= 2.03; a *= 0.5; }
   return s;
 }
-// Dust with knots in it. A gentle 1.0 +/- 0.5 wobble on the density reads as a
-// dirty lens, not as a nebula: the first version of this varied density by half
-// and the picture came out a flat olive wash. Nebulae are mostly nothing with
-// dense banks in them, so this is remapped hard — squared after a threshold —
-// to give a field that is empty in most places and three times the base density
-// in a few, which is what makes a bank of it read as a bank.
-float dust(vec3 p) {
-  vec3 q = p * (uNoiseScale * 0.0006) + vec3(0.0, 0.0, uTime * uNoiseSpeed * 0.03);
-  float n = fbm(q);
-  n = clamp(n * 2.1 - 0.55, 0.0, 1.0);
-  return n * n * 3.2;
+// Relative density at a point: 1.0 is the plain figure, and the knots run to
+// about three times it. Nebulae are mostly nothing with banks in them, so this
+// is remapped hard rather than wobbled.
+float medium(vec3 p) {
+  vec3 q = p * (uNScale * 0.0006) + vec3(0.0, 0.0, uNTime * uNSpeed * 0.03);
+  float n = clamp(fbm(q) * 2.1 - 0.55, 0.0, 1.0);
+  return mix(1.0, n * n * 3.2, uNAmt);
 }
+`;
 
-// Units. Density is an extinction coefficient in reciprocal metres — sigma
-// 1.35e-4 over a 4.2 km ray is an optical depth of about 0.57, which is haze
-// you can see through. Both modes use it, which is the only reason their
-// pictures can be compared: the analytic integral has units of 1/length and
-// has to be multiplied by sigma to become radiance, and leaving that out is
-// what blew the first version of this shader to white. K is a unit choice for
-// how bright a wire is, picked so gain 1 is a sane picture.
+/*
+ * Two ways to light the medium, and only one of them can absorb.
+ *
+ * CLOSED FORM is exact and free of marching: in a medium of even density the
+ * light a view ray picks up from a point source falls off as 1/r^2 along its
+ * whole length, and that integral solves as (atan((far-s0)/h) + atan(s0/h))/h.
+ * One sqrt and two atans per light per pixel. What it cannot do is absorb:
+ * extinction inside the integral has no elementary form, and structure in the
+ * medium has none at all. It is the reference, not the answer.
+ *
+ * MARCHED walks the ray and carries transmittance with it, so the medium both
+ * scatters and absorbs: a bank of dust lights up on its near side and shadows
+ * whatever is behind it. Albedo splits the two — 1.0 is a pure scatterer, 0.0
+ * is soot that only ever takes light away.
+ */
+const VOL_FS = `#version 300 es
+precision highp float;
+uniform vec3 uCam, uRight, uUp, uFwd;
+uniform float uAspect, uTanH, uFar, uTime;
+uniform vec4 uLp[${MAXL}];        // xyz light position, w intensity
+uniform vec4 uLc[${MAXL}];        // rgb colour, a softening radius
+uniform int uCount, uMode, uSteps;
+uniform float uDensity, uGain, uFalloff, uAlbedo;
+in vec2 vUv;
+out vec4 fragColor;
+${NOISE_GLSL}
+
+// Density is an extinction coefficient in reciprocal metres. 1.6e-4 over the
+// 4.2 km draw distance is an optical depth of 0.67 — haze you can see through.
+// K is a unit choice for how bright a wire is, picked so gain 1 is sane.
 float sigma() { return uDensity * 1e-4; }
 const float K = 420.0;
 
-// exact airlight from one point source through fog of even density
-vec3 analytic(vec3 ro, vec3 rd) {
-  vec3 acc = vec3(0.0);
-  float s = sigma();
+vec3 fromLights(vec3 x) {
+  vec3 lit = vec3(0.0);
   for (int i = 0; i < ${MAXL}; i++) {
     if (i >= uCount) break;
-    vec3 v = uLp[i].xyz - ro;
-    float s0 = dot(v, rd);
-    float soft = uLc[i].a;
-    float h = sqrt(max(dot(v, v) - s0 * s0, soft * soft));
-    float I = (atan((uFar - s0) / h) + atan(s0 / h)) / h;
-    acc += uLc[i].rgb * uLp[i].w * I * exp(-s * uExt * max(s0, 0.0));
+    vec3 dv = uLp[i].xyz - x;
+    float r2 = max(dot(dv, dv), uLc[i].a * uLc[i].a);
+    lit += uLc[i].rgb * uLp[i].w * pow(r2, -uFalloff * 0.5);
   }
-  // The closed form assumes the dust is everywhere at full density. The marched
-  // path does not: after the remap the noise field averages about 0.45 of the
-  // base, so comparing the two without this put analytic at twice the exposure
-  // and read as "the exact one blows out", which was an accounting error rather
-  // than anything about the maths.
-  return acc * s * K * mix(1.0, 0.45, uNoiseAmt);
+  return lit;
 }
 
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
   vec3 rd = normalize(uFwd + uRight * (p.x * uAspect * uTanH) + uUp * (p.y * uTanH));
   vec3 col = vec3(0.0);
+  float s = sigma();
 
   if (uMode == 0) {
-    col = analytic(uCam, rd);
-  } else if (uMode == 1) {
+    // closed form: even density, no extinction, exactly 1/r^2
+    for (int i = 0; i < ${MAXL}; i++) {
+      if (i >= uCount) break;
+      vec3 v = uLp[i].xyz - uCam;
+      float s0 = dot(v, rd);
+      float soft = uLc[i].a;
+      float h = sqrt(max(dot(v, v) - s0 * s0, soft * soft));
+      col += uLc[i].rgb * uLp[i].w * ((atan((uFar - s0) / h) + atan(s0 / h)) / h);
+    }
+    col *= s * uAlbedo * K;
+  } else {
     float dt = uFar / float(uSteps);
     float T = 1.0;
     for (int k = 0; k < 96; k++) {
       if (k >= uSteps) break;
-      float t = (float(k) + 0.5) * dt;
-      vec3 x = uCam + rd * t;
-      float dn = dust(x);
-      float d = sigma() * mix(1.0, dn, uNoiseAmt);
-      // the dust glows where it is thick, which is most of what you see of a
-      // nebula before anything flies into it
-      vec3 lit = uNeb * uAmbient * (0.1 + dn) * 0.004;
-      for (int i = 0; i < ${MAXL}; i++) {
-        if (i >= uCount) break;
-        vec3 dv = uLp[i].xyz - x;
-        float r2 = max(dot(dv, dv), uLc[i].a * uLc[i].a);
-        lit += uLc[i].rgb * uLp[i].w * pow(r2, -uFalloff * 0.5);
-      }
-      col += T * lit * d * dt;
-      T *= exp(-d * dt * uExt);
-      if (T < 0.02) break;
+      vec3 x = uCam + rd * ((float(k) + 0.5) * dt);
+      float st = s * medium(x);                 // extinction here and now
+      col += T * (uAlbedo * st) * fromLights(x) * dt;
+      T *= exp(-st * dt);                       // and what it took on the way
+      if (T < 0.002) break;
     }
     col *= K;
-  } else {
-    // The analytic glow, shaped by a short density-only march. Averaging the
-    // density along the ray flattens exactly the thing the march was for, so
-    // this keeps a near-weighted sum instead: the bank of dust in front of you
-    // is what you see, and it stays a bank.
-    // Weight the near dust, but not so hard that the march never leaves one
-    // cell of the noise: at exp(-t/900) it only ever sampled the first cell,
-    // neighbouring rays all read the same number, and the structure the march
-    // exists for came out as a flat wash.
-    int N = 14;
-    float dt = uFar / float(N), m = 0.0, w = 0.0;
-    for (int k = 0; k < 14; k++) {
-      float t = (float(k) + 0.5) * dt;
-      float fall = exp(-t * 0.00038);
-      m += dust(uCam + rd * t) * fall;
-      w += fall;
-    }
-    m /= max(w, 1e-4);
-    col = analytic(uCam, rd) / mix(1.0, 0.45, uNoiseAmt) * mix(1.0, m, uNoiseAmt);
-    col += uNeb * uAmbient * m * 0.03;
   }
 
   col *= uGain;
@@ -294,19 +276,60 @@ void main() {
   fragColor = vec4(max(col, vec3(0.0)), 1.0);
 }`;
 
-const UPSAMPLE_FS = `#version 300 es
+/*
+ * The wires, dimmed by what they are seen through.
+ *
+ * This renderer has no depth buffer — lines are additive and everything shows
+ * through everything — so there is no per-pixel distance for a screen-space
+ * pass to attenuate against. There is one per segment, though, and segments are
+ * few where pixels are many: the transmittance march goes in the vertex shader,
+ * six taps from the eye to each end of the line, and the rasteriser interpolates
+ * between them. Overlapping segments at different depths each get their own,
+ * which per-pixel nearest-depth could not do anyway.
+ *
+ * The game's own shaders are the source; these are that, patched, so the lab
+ * cannot quietly drift away from what ships.
+ */
+const FOG_LINE_VS = LINE_VS
+  .replace('out float vGlow;', `out float vGlow;
+out float vT;
+uniform vec3 uEye;
+uniform float uSigma;
+${NOISE_GLSL}
+float through(vec3 p) {
+  vec3 d = p - uEye;
+  float L = length(d);
+  if (L < 1e-3 || uSigma <= 0.0) return 1.0;
+  d /= L;
+  const int N = 6;
+  float dt = L / float(N), tau = 0.0;
+  for (int i = 0; i < N; i++) tau += medium(uEye + d * ((float(i) + 0.5) * dt)) * dt;
+  return exp(-uSigma * tau);
+}`)
+  .replace('  vGlow = aExt.x;', '  vGlow = aExt.x;\n  vT = cy < 0.0 ? through(aA.xyz) : through(aB.xyz);');
+
+const FOG_LINE_FS = LINE_FS
+  .replace('in float vGlow;', 'in float vGlow;\nin float vT;')
+  .replace('fragColor = vec4(max(c, vec3(0.0)), 1.0);', 'fragColor = vec4(max(c * vT, vec3(0.0)), 1.0);');
+
+// No bloom, no CRT, no vignette, no scanlines. Exposure and a clamp, which is
+// the least you can do with an HDR target and still put it on a screen.
+const SHOW_FS = `#version 300 es
 precision highp float;
-uniform sampler2D uSrc;
+uniform sampler2D uScene;
+uniform sampler2D uVol;
+uniform float uExposure;
 in vec2 vUv;
 out vec4 fragColor;
-void main() { fragColor = vec4(texture(uSrc, vUv).rgb, 1.0); }`;
+void main() {
+  vec3 c = (texture(uScene, vUv).rgb + texture(uVol, vUv).rgb) * uExposure;
+  if (any(isnan(c))) c = vec3(0.0);
+  fragColor = vec4(clamp(c, vec3(0.0), vec3(1.0)), 1.0);
+}`;
 
-const lineProg = program(LINE_VS, LINE_FS);
+const lineProg = program(FOG_LINE_VS, FOG_LINE_FS);
 const volProg = program(FULLSCREEN_VS, VOL_FS);
-const upProg = program(FULLSCREEN_VS, UPSAMPLE_FS);
-const brightProg = program(FULLSCREEN_VS, BRIGHT_FS);
-const blurProg = program(FULLSCREEN_VS, BLUR_FS);
-const compProg = program(FULLSCREEN_VS, COMPOSITE_FS);
+const showProg = program(FULLSCREEN_VS, SHOW_FS);
 
 const target = (w, h) => {
   const t = gl.createTexture();
@@ -324,7 +347,7 @@ const target = (w, h) => {
   return { t, fbo, w, h };
 };
 
-let W = 0, H = 0, sceneRT = null, volRT = null, b1 = null, b2 = null, bt = null;
+let W = 0, H = 0, sceneRT = null, volRT = null;
 const vao = gl.createVertexArray();
 const vbo = gl.createBuffer();
 gl.bindVertexArray(vao);
@@ -344,9 +367,6 @@ function resize() {
   W = w; H = h;
   canvas.width = W; canvas.height = H;
   sceneRT = target(W, H);
-  bt = target(W >> 1, H >> 1);
-  b1 = [target(W >> 2, H >> 2), target(W >> 2, H >> 2)];
-  b2 = [target(W >> 4 || 1, H >> 4 || 1), target(W >> 4 || 1, H >> 4 || 1)];
   volRT = null;
 }
 addEventListener('resize', resize);
@@ -354,16 +374,15 @@ resize();
 
 /* ------------------------------------------------------------- controls -- */
 const S = {
-  mode: 2, fog: true, wireLights: true,
-  density: 1.6, gain: 1.6, falloff: 2.0, ext: 1.0,
-  namt: 0.9, nscale: 1.6, nspeed: 1.0, namb: 0.12,
-  lcount: 40, steps: 28, scale: 0.5,
-  neb: [1.0, 0.46, 0.30],
+  mode: 1, fog: true, wireLights: true,
+  density: 1.6, gain: 1.6, falloff: 2.0, albedo: 0.8,
+  namt: 0.9, nscale: 1.6, nspeed: 1.0,
+  lcount: 40, steps: 32, scale: 0.5, exposure: 1.0,
 };
-const MODES = ['ANALYTIC', 'MARCHED', 'HYBRID'];
+const MODES = ['CLOSED FORM', 'MARCHED'];
 const PRESETS = {
-  CINDER: { neb: [1.0, 0.46, 0.30], density: 1.6, namb: 0.12, namt: 0.9, gain: 1.6, nscale: 1.6 },
-  HALCYON: { neb: [0.45, 0.72, 1.0], density: 0.30, namb: 0.03, namt: 0.6, gain: 1.0, nscale: 2.6 },
+  CINDER: { density: 1.6, albedo: 0.8, namt: 0.9, gain: 1.6, nscale: 1.6 },
+  HALCYON: { density: 0.30, albedo: 0.9, namt: 0.6, gain: 1.0, nscale: 2.6 },
 };
 const modeRow = document.getElementById('modes');
 MODES.forEach((m, i) => {
@@ -387,7 +406,7 @@ const srcRow = document.getElementById('src');
   b.dataset.src = i; srcRow.appendChild(b);
 });
 
-const sliders = ['density', 'gain', 'falloff', 'ext', 'namt', 'nscale', 'nspeed', 'namb', 'lcount', 'steps', 'scale'];
+const sliders = ['density', 'albedo', 'namt', 'nscale', 'nspeed', 'gain', 'falloff', 'lcount', 'exposure', 'steps', 'scale'];
 for (const id of sliders) {
   const el = document.getElementById(id);
   el.value = S[id];
@@ -420,7 +439,6 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'Digit1') { S.mode = 0; sync(); }
   if (e.code === 'Digit2') { S.mode = 1; sync(); }
-  if (e.code === 'Digit3') { S.mode = 2; sync(); }
   if (e.code === 'KeyF') { S.fog = !S.fog; sync(); }
   if (e.code === 'KeyC') { Object.assign(S, PRESETS.CINDER); sync(); }
   if (e.code === 'KeyH') { Object.assign(S, PRESETS.HALCYON); sync(); }
@@ -562,6 +580,13 @@ function frame(now) {
   gl.bufferData(gl.ARRAY_BUFFER, batch.data.subarray(0, batch.count * 16), gl.DYNAMIC_DRAW);
   gl.uniformMatrix4fv(lineProg.u.uViewProj, false, viewProj);
   gl.uniform4f(lineProg.u.uRes, W, H, 1 / W, 1 / H);
+  // what the medium takes out of every wire on its way to the eye
+  gl.uniform3f(lineProg.u.uEye, cam.pos[0], cam.pos[1], cam.pos[2]);
+  gl.uniform1f(lineProg.u.uSigma, S.fog ? S.density * 1e-4 : 0);
+  gl.uniform1f(lineProg.u.uNAmt, S.namt);
+  gl.uniform1f(lineProg.u.uNScale, S.nscale);
+  gl.uniform1f(lineProg.u.uNSpeed, S.nspeed);
+  gl.uniform1f(lineProg.u.uNTime, time);
   gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, batch.count);
   gl.bindVertexArray(blank);
 
@@ -589,67 +614,40 @@ function frame(now) {
     gl.uniform1f(volProg.u.uDensity, S.density);
     gl.uniform1f(volProg.u.uGain, S.gain);
     gl.uniform1f(volProg.u.uFalloff, S.falloff);
-    gl.uniform1f(volProg.u.uExt, S.ext);
-    gl.uniform1f(volProg.u.uNoiseAmt, S.namt);
-    gl.uniform1f(volProg.u.uNoiseScale, S.nscale);
-    gl.uniform1f(volProg.u.uNoiseSpeed, S.nspeed);
-    gl.uniform1f(volProg.u.uAmbient, S.namb);
-    gl.uniform3f(volProg.u.uNeb, S.neb[0], S.neb[1], S.neb[2]);
+    gl.uniform1f(volProg.u.uAlbedo, S.albedo);
+    gl.uniform1f(volProg.u.uNAmt, S.namt);
+    gl.uniform1f(volProg.u.uNScale, S.nscale);
+    gl.uniform1f(volProg.u.uNSpeed, S.nspeed);
+    gl.uniform1f(volProg.u.uNTime, time);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, sceneRT.fbo);
-    gl.viewport(0, 0, W, H);
-    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-    gl.useProgram(upProg.p);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, volRT.t);
-    gl.uniform1i(upProg.u.uSrc, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  } else {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, volRT.fbo);
+    gl.viewport(0, 0, volRT.w, volRT.h);
+    gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
   }
   gl.disable(gl.BLEND);
 
-  // --- bloom and composite, exactly as the game does it -----------------
-  const bind = (tex, unit, loc) => {
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.uniform1i(loc, unit);
-  };
-  const blit = (prog, dst, setup) => {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fbo : null);
-    gl.viewport(0, 0, dst ? dst.w : W, dst ? dst.h : H);
-    gl.useProgram(prog.p);
-    setup();
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-  };
-  blit(brightProg, bt, () => {
-    bind(sceneRT.t, 0, brightProg.u.uSrc);
-    gl.uniform1f(brightProg.u.uThreshold, 0.42);
-  });
-  const blur = (src, dst, dx, dy, scale) => blit(blurProg, dst, () => {
-    bind(src.t, 0, blurProg.u.uSrc);
-    gl.uniform2f(blurProg.u.uTexel, 1 / src.w, 1 / src.h);
-    gl.uniform2f(blurProg.u.uDir, dx, dy);
-    gl.uniform1f(blurProg.u.uScale, scale);
-  });
-  blur(bt, b1[0], 1, 0, 1); blur(b1[0], b1[1], 0, 1, 1);
-  blur(b1[1], b2[0], 1, 0, 2); blur(b2[0], b2[1], 0, 1, 2);
-  blit(compProg, null, () => {
-    bind(sceneRT.t, 0, compProg.u.uScene);
-    bind(b1[1].t, 1, compProg.u.uBloom1);
-    bind(b2[1].t, 2, compProg.u.uBloom2);
-    gl.uniform2f(compProg.u.uTexel, 1 / W, 1 / H);
-    gl.uniform1f(compProg.u.uTime, time);
-    gl.uniform1f(compProg.u.uB1, 0.85);
-    gl.uniform1f(compProg.u.uB2, 0.60);
-    gl.uniform1f(compProg.u.uCrt, 1);
-  });
+  // --- put it on the screen, and nothing else ---------------------------
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(showProg.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneRT.t);
+  gl.uniform1i(showProg.u.uScene, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, volRT.t);
+  gl.uniform1i(showProg.u.uVol, 1);
+  gl.uniform1f(showProg.u.uExposure, S.exposure);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-  hud.innerHTML = `<b>${MODES[S.mode]}</b>${S.fog ? '' : ' · FOG OFF'}<br>`
+  const sig = S.fog ? S.density * 1e-4 : 0;
+  const tau = sig * FAR * (S.namt > 0 ? 0.45 : 1);
+  hud.innerHTML = `<b>${MODES[S.mode]}</b>${S.fog ? '' : ' · MEDIUM OFF'}<br>`
     + `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1e-3)).toFixed(1)} ms<br>`
-    + `${batch.count} segments · <b>${count}</b> lights<br>`
-    + `${S.wireLights ? 'lights from wires' : 'lights from hulls'} · ${Math.round(S.scale * 100)}% res`
-    + (S.mode === 1 ? `<br>${S.steps} steps · ${(S.steps * count / 1000).toFixed(0)}k evals/px` : '')
-    + (S.mode !== 1 ? `<br>falloff is exactly 1/r² here` : '');
+    + `${batch.count} segments · <b>${count}</b> lights from ${S.wireLights ? 'wires' : 'hulls'}<br>`
+    + `σ <b>${sig.toExponential(2)}</b> /m · τ <b>${tau.toFixed(2)}</b> over ${(FAR / 1000).toFixed(1)} km<br>`
+    + `transmittance at ${(FAR / 1000).toFixed(1)} km · <b>${(Math.exp(-tau) * 100).toFixed(0)}%</b><br>`
+    + (S.mode === 1
+        ? `absorbing · albedo ${S.albedo.toFixed(2)} · ${S.steps} steps`
+        : 'no absorption in the volume — closed form cannot');
 
   requestAnimationFrame(frame);
 }
