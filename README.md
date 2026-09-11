@@ -120,6 +120,34 @@ and whenever the page is hidden or closed — so swiping the app away does not c
 progress. `SAVE NOW` and `RELOAD LAST SAVE` live in the manual (`M`, or the flight
 manual button).
 
+## The nebula lab
+
+`lab/nebula.html` is a sandbox, not part of the game — nothing in `src/` imports
+it and it ships nowhere near the service worker's shell. It imports the game's
+own models, palette and line shaders and adds one pass on top, so what you are
+looking at is the real renderer with fog in it rather than a mock-up.
+
+Three ways to put the wires into the dust, switchable live so their cost is a
+number rather than an argument:
+
+* **ANALYTIC** — closed form. In fog of even density the light a view ray picks
+  up from a point source falls off as 1/r² along its whole length, and that
+  integral solves exactly: with `h` the ray's closest approach and `s0` the
+  distance along the ray to it, `(atan((far-s0)/h) + atan(s0/h)) / h`. One sqrt
+  and two atans per light per pixel. No marching, no banding, and it is inverse
+  square because the maths is, not because a curve was tuned to look like it.
+  Smooth, and with nothing in the dust to see.
+* **MARCHED** — walks the ray instead, so the dust can have structure and the
+  falloff exponent becomes a slider. The honest one and the expensive one:
+  steps × lights per pixel.
+* **HYBRID** — the analytic glow, shaped by a short density-only march.
+
+Run it with `npm start` and open `/lab/nebula.html`. Drag to look, `W`/`S` for
+speed, `1`-`3` for the mode, `F` for fog on and off, `H`/`C` for the two sector
+presets, `SPACE` to put a cutting beam in the dust. The readout gives frame time
+and the light count; run it on real hardware, because software rendering will
+report whatever it likes.
+
 ## A region has a character
 
 Each sector has its own sky, built from a seed in its definition, so a belt looks

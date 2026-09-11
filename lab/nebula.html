@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>STARQUEST — NEBULA LAB</title>
+<style>
+  :root { --green: #6cff9f; --amber: #ffc23c; --dim: rgba(108,255,159,0.45); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #02100a; color: var(--green);
+    font: 11px/1.4 "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.06em; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #panel { position: fixed; top: 10px; left: 10px; width: 268px; max-height: calc(100% - 20px);
+    overflow: auto; padding: 10px 12px 12px; background: rgba(0,22,13,0.82);
+    border: 1px solid rgba(108,255,159,0.28); backdrop-filter: blur(3px); }
+  #panel h1 { margin: 0 0 2px; font-size: 11px; letter-spacing: 0.2em; font-weight: 400; }
+  #panel p.sub { margin: 0 0 9px; color: var(--dim); font-size: 10px; }
+  fieldset { border: 0; border-top: 1px solid rgba(108,255,159,0.18); margin: 9px 0 0; padding: 8px 0 0; }
+  legend { padding: 0 6px 0 0; color: var(--amber); font-size: 10px; letter-spacing: 0.16em; }
+  label { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  label span.n { flex: 1; }
+  label span.v { color: var(--amber); min-width: 44px; text-align: right; }
+  input[type=range] { flex: 1.5; accent-color: #6cff9f; height: 14px; }
+  .row { display: flex; gap: 4px; flex-wrap: wrap; margin: 5px 0; }
+  button { font: inherit; letter-spacing: 0.08em; color: var(--green); background: rgba(0,32,19,0.7);
+    border: 1px solid rgba(108,255,159,0.35); padding: 4px 7px; cursor: pointer; text-transform: uppercase; }
+  button.on { color: #001a0d; background: var(--green); border-color: var(--green); }
+  #hud { position: fixed; right: 10px; top: 10px; text-align: right; color: var(--dim); }
+  #hud b { color: var(--amber); font-weight: 400; }
+  #keys { position: fixed; left: 10px; bottom: 10px; color: var(--dim); font-size: 10px; }
+  #keys u { color: var(--green); text-decoration: none; }
+  #err { position: fixed; inset: 20% 10% auto; padding: 16px; border: 1px solid #ff6a4a;
+    background: rgba(30,4,0,0.9); color: #ffb0a0; display: none; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="panel">
+  <h1>NEBULA LAB</h1>
+  <p class="sub">The reach, with the wires lighting the dust. Nothing here touches the game.</p>
+
+  <div class="row" id="modes"></div>
+  <div class="row" id="presets"></div>
+
+  <fieldset><legend>FOG</legend>
+    <label><span class="n">density</span><input id="density" type="range" min="0" max="4" step="0.01"><span class="v"></span></label>
+    <label><span class="n">gain</span><input id="gain" type="range" min="0" max="6" step="0.01"><span class="v"></span></label>
+    <label><span class="n">falloff</span><input id="falloff" type="range" min="1" max="3.4" step="0.05"><span class="v"></span></label>
+    <label><span class="n">extinction</span><input id="ext" type="range" min="0" max="3" step="0.01"><span class="v"></span></label>
+  </fieldset>
+
+  <fieldset><legend>NEBULA</legend>
+    <label><span class="n">amount</span><input id="namt" type="range" min="0" max="1" step="0.01"><span class="v"></span></label>
+    <label><span class="n">scale</span><input id="nscale" type="range" min="0.2" max="6" step="0.05"><span class="v"></span></label>
+    <label><span class="n">drift</span><input id="nspeed" type="range" min="0" max="3" step="0.01"><span class="v"></span></label>
+    <label><span class="n">ambient</span><input id="namb" type="range" min="0" max="1.2" step="0.01"><span class="v"></span></label>
+  </fieldset>
+
+  <fieldset><legend>LIGHTS</legend>
+    <div class="row" id="src"></div>
+    <label><span class="n">count</span><input id="lcount" type="range" min="1" max="64" step="1"><span class="v"></span></label>
+    <label><span class="n">steps</span><input id="steps" type="range" min="4" max="96" step="1"><span class="v"></span></label>
+    <label><span class="n">res</span><input id="scale" type="range" min="0.25" max="1" step="0.05"><span class="v"></span></label>
+  </fieldset>
+</div>
+
+<div id="hud"></div>
+<div id="keys">
+  <u>1</u>-<u>3</u> mode · <u>F</u> fog on/off · <u>H</u>/<u>C</u> preset · <u>SPACE</u> cut a rock ·
+  <u>drag</u> look · <u>W</u>/<u>S</u> speed · <u>P</u> panel
+</div>
+<div id="err"></div>
+
+<script type="module">
+import { LineBatch } from '../src/render/lines.js';
+import { MODELS, ASTEROID_SHAPES } from '../src/render/models.js';
+import { C } from '../src/render/palette.js';
+import { LINE_VS, LINE_FS, FULLSCREEN_VS, BRIGHT_FS, BLUR_FS, COMPOSITE_FS } from '../src/render/shaders_gl.js';
+import { v3, m4, m4perspective, m4view, m4mul, qid, qaxis, qmul, qnorm, qrot, qlook, clamp } from '../src/core/math.js';
+
+const fail = (msg) => { const e = document.getElementById('err'); e.style.display = 'block'; e.textContent = msg; };
+
+/* ------------------------------------------------------------------ scene --
+ * A slice of the reach: rock, a few hulls, a gate, and a cutter at work. The
+ * point of the lab is the light in the dust, so everything here exists to put
+ * light in interesting places — a beam sweeping a rock face, an engine coming
+ * at you, a gate glowing through a bank of it.
+ */
+const FAR = 4200;
+const scene = {
+  rocks: [], ships: [], beams: [],
+  gate: { pos: v3(-300, 46, -880), quat: qid(), spin: 0.14 },
+  station: { pos: v3(420, -80, -1900), quat: qid(), spin: 0.03 },
+};
+let seed = 0xC14D;
+const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+// Mesh scale is the model's own, not the hull's radius in metres — the station
+// is 3.2 here and 83 m across, and passing the 83 made it twenty-six times too
+// big and swallowed the camera.
+for (let i = 0; i < 64; i++) {
+  scene.rocks.push({
+    pos: v3((rnd() - 0.5) * 1500, (rnd() - 0.5) * 620, -rnd() * 2600 - 90),
+    quat: qnorm([rnd() - 0.5, rnd() - 0.5, rnd() - 0.5, rnd() - 0.5]),
+    shape: ASTEROID_SHAPES[(rnd() * ASTEROID_SHAPES.length) | 0],
+    r: 10 + rnd() * 42, spin: (rnd() - 0.5) * 0.25, rich: rnd() < 0.22,
+  });
+}
+const hull = (model, pos, scale, col, vel) => ({ model: MODELS[model], pos, quat: qid(), scale, col, vel, t: rnd() * 9 });
+scene.ships.push(hull('marauder', v3(-46, 9, -150), 1.0, C.pirate, v3(4, 0, 26)));
+scene.ships.push(hull('hauler', v3(120, -22, -430), 1.0, C.trader, v3(-9, 1, 18)));
+scene.ships.push(hull('corsair', v3(-150, 24, -300), 1.0, C.pirate, v3(12, -2, 22)));
+scene.ships.push(hull('prospector', v3(34, -8, -95), 1.1, C.player, v3(0, 0, 10)));
+
+/* ------------------------------------------------------------------- gl -- */
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' });
+if (!gl) fail('WebGL2 is not available here, which is what this lab is built on.');
+const floatOK = gl.getExtension('EXT_color_buffer_float');
+const linear = gl.getExtension('OES_texture_float_linear');
+const HDR = floatOK ? gl.RGBA16F : gl.RGBA8;
+
+const compile = (type, src) => {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail(gl.getShaderInfoLog(s) + '\n\n' + src);
+  return s;
+};
+const program = (vs, fs) => {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail(gl.getProgramInfoLog(p));
+  const u = {};
+  for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); i++) {
+    const info = gl.getActiveUniform(p, i);
+    u[info.name.replace('[0]', '')] = gl.getUniformLocation(p, info.name);
+  }
+  return { p, u };
+};
+
+const MAXL = 64;
+
+/* ----------------------------------------------------------- the new pass --
+ * Three ways to put the wires into the dust, so the cost of each is a number
+ * rather than an argument.
+ *
+ * ANALYTIC is the exact one. In fog of even density, the light a view ray picks
+ * up from a point source falls off as 1/r^2 along its whole length, and that
+ * integral has a closed form: with h the ray's closest approach to the light
+ * and s0 the distance along the ray to that point, it is (atan((far-s0)/h) +
+ * atan(s0/h)) / h. One sqrt and two atans per light per pixel, no marching, no
+ * banding, and it is inverse square because the maths is, not because a curve
+ * was tuned to look like it.
+ *
+ * MARCHED walks the ray instead, so the dust can have structure — fbm noise
+ * for density — and the falloff exponent becomes a slider rather than a
+ * constant. This is the honest one and the expensive one: steps x lights.
+ *
+ * HYBRID is the one worth shipping if it holds up: the analytic glow, which is
+ * where nearly all the light is, modulated by a short march that only samples
+ * density. Structure where the eye looks for it, closed form everywhere else.
+ */
+const VOL_FS = `#version 300 es
+precision highp float;
+uniform vec3 uCam, uRight, uUp, uFwd;
+uniform float uAspect, uTanH, uFar, uTime;
+uniform vec4 uLp[${MAXL}];        // xyz light position, w intensity
+uniform vec4 uLc[${MAXL}];        // rgb colour, a softening radius
+uniform int uCount, uMode, uSteps;
+uniform float uDensity, uGain, uFalloff, uExt;
+uniform float uNoiseAmt, uNoiseScale, uNoiseSpeed, uAmbient;
+uniform vec3 uNeb;
+in vec2 vUv;
+out vec4 fragColor;
+
+float hash(vec3 p) {
+  p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419));
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float vnoise(vec3 x) {
+  vec3 i = floor(x), f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x),
+                 mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
+                 mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+float fbm(vec3 p) {
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 3; i++) { s += a * vnoise(p); p *= 2.03; a *= 0.5; }
+  return s;
+}
+// Dust with knots in it. A gentle 1.0 +/- 0.5 wobble on the density reads as a
+// dirty lens, not as a nebula: the first version of this varied density by half
+// and the picture came out a flat olive wash. Nebulae are mostly nothing with
+// dense banks in them, so this is remapped hard — squared after a threshold —
+// to give a field that is empty in most places and three times the base density
+// in a few, which is what makes a bank of it read as a bank.
+float dust(vec3 p) {
+  vec3 q = p * (uNoiseScale * 0.0006) + vec3(0.0, 0.0, uTime * uNoiseSpeed * 0.03);
+  float n = fbm(q);
+  n = clamp(n * 2.1 - 0.55, 0.0, 1.0);
+  return n * n * 3.2;
+}
+
+// Units. Density is an extinction coefficient in reciprocal metres — sigma
+// 1.35e-4 over a 4.2 km ray is an optical depth of about 0.57, which is haze
+// you can see through. Both modes use it, which is the only reason their
+// pictures can be compared: the analytic integral has units of 1/length and
+// has to be multiplied by sigma to become radiance, and leaving that out is
+// what blew the first version of this shader to white. K is a unit choice for
+// how bright a wire is, picked so gain 1 is a sane picture.
+float sigma() { return uDensity * 1e-4; }
+const float K = 420.0;
+
+// exact airlight from one point source through fog of even density
+vec3 analytic(vec3 ro, vec3 rd) {
+  vec3 acc = vec3(0.0);
+  float s = sigma();
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uCount) break;
+    vec3 v = uLp[i].xyz - ro;
+    float s0 = dot(v, rd);
+    float soft = uLc[i].a;
+    float h = sqrt(max(dot(v, v) - s0 * s0, soft * soft));
+    float I = (atan((uFar - s0) / h) + atan(s0 / h)) / h;
+    acc += uLc[i].rgb * uLp[i].w * I * exp(-s * uExt * max(s0, 0.0));
+  }
+  // The closed form assumes the dust is everywhere at full density. The marched
+  // path does not: after the remap the noise field averages about 0.45 of the
+  // base, so comparing the two without this put analytic at twice the exposure
+  // and read as "the exact one blows out", which was an accounting error rather
+  // than anything about the maths.
+  return acc * s * K * mix(1.0, 0.45, uNoiseAmt);
+}
+
+void main() {
+  vec2 p = vUv * 2.0 - 1.0;
+  vec3 rd = normalize(uFwd + uRight * (p.x * uAspect * uTanH) + uUp * (p.y * uTanH));
+  vec3 col = vec3(0.0);
+
+  if (uMode == 0) {
+    col = analytic(uCam, rd);
+  } else if (uMode == 1) {
+    float dt = uFar / float(uSteps);
+    float T = 1.0;
+    for (int k = 0; k < 96; k++) {
+      if (k >= uSteps) break;
+      float t = (float(k) + 0.5) * dt;
+      vec3 x = uCam + rd * t;
+      float dn = dust(x);
+      float d = sigma() * mix(1.0, dn, uNoiseAmt);
+      // the dust glows where it is thick, which is most of what you see of a
+      // nebula before anything flies into it
+      vec3 lit = uNeb * uAmbient * (0.1 + dn) * 0.004;
+      for (int i = 0; i < ${MAXL}; i++) {
+        if (i >= uCount) break;
+        vec3 dv = uLp[i].xyz - x;
+        float r2 = max(dot(dv, dv), uLc[i].a * uLc[i].a);
+        lit += uLc[i].rgb * uLp[i].w * pow(r2, -uFalloff * 0.5);
+      }
+      col += T * lit * d * dt;
+      T *= exp(-d * dt * uExt);
+      if (T < 0.02) break;
+    }
+    col *= K;
+  } else {
+    // The analytic glow, shaped by a short density-only march. Averaging the
+    // density along the ray flattens exactly the thing the march was for, so
+    // this keeps a near-weighted sum instead: the bank of dust in front of you
+    // is what you see, and it stays a bank.
+    // Weight the near dust, but not so hard that the march never leaves one
+    // cell of the noise: at exp(-t/900) it only ever sampled the first cell,
+    // neighbouring rays all read the same number, and the structure the march
+    // exists for came out as a flat wash.
+    int N = 14;
+    float dt = uFar / float(N), m = 0.0, w = 0.0;
+    for (int k = 0; k < 14; k++) {
+      float t = (float(k) + 0.5) * dt;
+      float fall = exp(-t * 0.00038);
+      m += dust(uCam + rd * t) * fall;
+      w += fall;
+    }
+    m /= max(w, 1e-4);
+    col = analytic(uCam, rd) / mix(1.0, 0.45, uNoiseAmt) * mix(1.0, m, uNoiseAmt);
+    col += uNeb * uAmbient * m * 0.03;
+  }
+
+  col *= uGain;
+  if (any(isnan(col))) col = vec3(0.0);
+  fragColor = vec4(max(col, vec3(0.0)), 1.0);
+}`;
+
+const UPSAMPLE_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc;
+in vec2 vUv;
+out vec4 fragColor;
+void main() { fragColor = vec4(texture(uSrc, vUv).rgb, 1.0); }`;
+
+const lineProg = program(LINE_VS, LINE_FS);
+const volProg = program(FULLSCREEN_VS, VOL_FS);
+const upProg = program(FULLSCREEN_VS, UPSAMPLE_FS);
+const brightProg = program(FULLSCREEN_VS, BRIGHT_FS);
+const blurProg = program(FULLSCREEN_VS, BLUR_FS);
+const compProg = program(FULLSCREEN_VS, COMPOSITE_FS);
+
+const target = (w, h) => {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, HDR, w, h, 0, gl.RGBA, floatOK ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+  const f = (floatOK && !linear) ? gl.NEAREST : gl.LINEAR;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { t, fbo, w, h };
+};
+
+let W = 0, H = 0, sceneRT = null, volRT = null, b1 = null, b2 = null, bt = null;
+const vao = gl.createVertexArray();
+const vbo = gl.createBuffer();
+gl.bindVertexArray(vao);
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+for (let i = 0; i < 4; i++) {
+  gl.enableVertexAttribArray(i);
+  gl.vertexAttribPointer(i, 4, gl.FLOAT, false, 64, i * 16);
+  gl.vertexAttribDivisor(i, 1);
+}
+gl.bindVertexArray(null);
+const blank = gl.createVertexArray();
+
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.max(2, Math.round(innerWidth * dpr)), h = Math.max(2, Math.round(innerHeight * dpr));
+  if (w === W && h === H && sceneRT) return;
+  W = w; H = h;
+  canvas.width = W; canvas.height = H;
+  sceneRT = target(W, H);
+  bt = target(W >> 1, H >> 1);
+  b1 = [target(W >> 2, H >> 2), target(W >> 2, H >> 2)];
+  b2 = [target(W >> 4 || 1, H >> 4 || 1), target(W >> 4 || 1, H >> 4 || 1)];
+  volRT = null;
+}
+addEventListener('resize', resize);
+resize();
+
+/* ------------------------------------------------------------- controls -- */
+const S = {
+  mode: 2, fog: true, wireLights: true,
+  density: 1.6, gain: 1.6, falloff: 2.0, ext: 1.0,
+  namt: 0.9, nscale: 1.6, nspeed: 1.0, namb: 0.12,
+  lcount: 40, steps: 28, scale: 0.5,
+  neb: [1.0, 0.46, 0.30],
+};
+const MODES = ['ANALYTIC', 'MARCHED', 'HYBRID'];
+const PRESETS = {
+  CINDER: { neb: [1.0, 0.46, 0.30], density: 1.6, namb: 0.12, namt: 0.9, gain: 1.6, nscale: 1.6 },
+  HALCYON: { neb: [0.45, 0.72, 1.0], density: 0.30, namb: 0.03, namt: 0.6, gain: 1.0, nscale: 2.6 },
+};
+const modeRow = document.getElementById('modes');
+MODES.forEach((m, i) => {
+  const b = document.createElement('button');
+  b.textContent = m; b.onclick = () => { S.mode = i; sync(); };
+  b.dataset.mode = i; modeRow.appendChild(b);
+});
+const fogBtn = document.createElement('button');
+fogBtn.textContent = 'FOG'; fogBtn.onclick = () => { S.fog = !S.fog; sync(); };
+modeRow.appendChild(fogBtn);
+const presetRow = document.getElementById('presets');
+Object.keys(PRESETS).forEach((k) => {
+  const b = document.createElement('button');
+  b.textContent = k; b.onclick = () => { Object.assign(S, PRESETS[k]); sync(); };
+  presetRow.appendChild(b);
+});
+const srcRow = document.getElementById('src');
+['FROM WIRES', 'FROM HULLS'].forEach((t, i) => {
+  const b = document.createElement('button');
+  b.textContent = t; b.onclick = () => { S.wireLights = i === 0; sync(); };
+  b.dataset.src = i; srcRow.appendChild(b);
+});
+
+const sliders = ['density', 'gain', 'falloff', 'ext', 'namt', 'nscale', 'nspeed', 'namb', 'lcount', 'steps', 'scale'];
+for (const id of sliders) {
+  const el = document.getElementById(id);
+  el.value = S[id];
+  el.oninput = () => { S[id] = +el.value; if (id === 'scale') volRT = null; sync(); };
+}
+function sync() {
+  for (const id of sliders) {
+    const el = document.getElementById(id);
+    el.value = S[id];
+    el.parentElement.querySelector('.v').textContent = (+S[id]).toFixed(id === 'lcount' || id === 'steps' ? 0 : 2);
+  }
+  for (const b of modeRow.querySelectorAll('[data-mode]')) b.classList.toggle('on', +b.dataset.mode === S.mode);
+  fogBtn.classList.toggle('on', S.fog);
+  for (const b of srcRow.querySelectorAll('[data-src]')) b.classList.toggle('on', (b.dataset.src === '0') === S.wireLights);
+}
+sync();
+
+/* ---------------------------------------------------------------- camera -- */
+const cam = { pos: v3(0, 0, 120), yaw: 0, pitch: 0, speed: 18 };
+let dragging = false;
+canvas.addEventListener('pointerdown', (e) => { dragging = true; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerup', () => { dragging = false; });
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  cam.yaw -= e.movementX * 0.0028;
+  cam.pitch = clamp(cam.pitch - e.movementY * 0.0028, -1.3, 1.3);
+});
+const keys = new Set();
+addEventListener('keydown', (e) => {
+  keys.add(e.code);
+  if (e.code === 'Digit1') { S.mode = 0; sync(); }
+  if (e.code === 'Digit2') { S.mode = 1; sync(); }
+  if (e.code === 'Digit3') { S.mode = 2; sync(); }
+  if (e.code === 'KeyF') { S.fog = !S.fog; sync(); }
+  if (e.code === 'KeyC') { Object.assign(S, PRESETS.CINDER); sync(); }
+  if (e.code === 'KeyH') { Object.assign(S, PRESETS.HALCYON); sync(); }
+  if (e.code === 'KeyP') { const p = document.getElementById('panel'); p.style.display = p.style.display === 'none' ? '' : 'none'; }
+  if (e.code === 'Space') e.preventDefault();
+});
+addEventListener('keyup', (e) => keys.delete(e.code));
+
+/* ----------------------------------------------------------------- draw -- */
+const batch = new LineBatch(40000);
+const proj = m4(), view = m4(), viewProj = m4();
+const camQuat = qid(), _yq = [0, 0, 0, 1], _pq = [0, 0, 0, 1];
+const lp = new Float32Array(MAXL * 4), lc = new Float32Array(MAXL * 4);
+const hud = document.getElementById('hud');
+
+let last = performance.now(), time = 0, fps = 60, cutT = 0;
+
+function lightsFromWires(count) {
+  // Every segment is a light; keep the brightest, which is what a production
+  // pass would do after clustering. Intensity scales with length, because a
+  // long bright wire puts more light in the dust than a short one.
+  const d = batch.data, n = batch.count, picks = [];
+  for (let i = 0; i < n; i++) {
+    const o = i * 16;
+    if (d[o + 3] > 0.5) continue;                       // screen-space, not in the world
+    const ax = d[o], ay = d[o + 1], az = d[o + 2];
+    const bx = d[o + 4], by = d[o + 5], bz = d[o + 6];
+    const len = Math.hypot(bx - ax, by - ay, bz - az);
+    const lum = (d[o + 8] + d[o + 9] + d[o + 10]) / 3 * d[o + 11] * d[o + 12];
+    picks.push([lum * Math.min(len, 60), i, len]);
+  }
+  picks.sort((a, b) => b[0] - a[0]);
+  const m = Math.min(count, picks.length, MAXL);
+  for (let k = 0; k < m; k++) {
+    const [w, i, len] = picks[k];
+    const o = i * 16;
+    lp[k * 4] = (d[o] + d[o + 4]) * 0.5;
+    lp[k * 4 + 1] = (d[o + 1] + d[o + 5]) * 0.5;
+    lp[k * 4 + 2] = (d[o + 2] + d[o + 6]) * 0.5;
+    lp[k * 4 + 3] = w * 0.9;
+    lc[k * 4] = d[o + 8]; lc[k * 4 + 1] = d[o + 9]; lc[k * 4 + 2] = d[o + 10];
+    lc[k * 4 + 3] = Math.max(len * 0.5, 6);            // a segment is not a point
+  }
+  return m;
+}
+
+function lightsFromHulls(count) {
+  const put = (k, p, col, power, soft) => {
+    lp[k * 4] = p[0]; lp[k * 4 + 1] = p[1]; lp[k * 4 + 2] = p[2]; lp[k * 4 + 3] = power;
+    lc[k * 4] = col[0]; lc[k * 4 + 1] = col[1]; lc[k * 4 + 2] = col[2]; lc[k * 4 + 3] = soft;
+  };
+  let k = 0;
+  for (const s of scene.ships) { if (k < count) put(k++, s.pos, s.col, 90, 8); }
+  for (const b of scene.beams) { if (k < count) put(k++, b.mid, b.col, 260, 10); }
+  if (k < count) put(k++, scene.gate.pos, C.station, 700, 24);
+  if (k < count) put(k++, scene.station.pos, C.station, 1100, 44);
+  for (const r of scene.rocks) {
+    if (k >= count || !r.rich) break;
+    put(k++, r.pos, C.rich, 26, r.r);
+  }
+  return k;
+}
+
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05); last = now; time += dt;
+  fps += ((1 / Math.max(dt, 1e-4)) - fps) * 0.08;
+  resize();
+  if (!volRT || volRT.w !== Math.round(W * S.scale)) {
+    volRT = target(Math.max(2, Math.round(W * S.scale)), Math.max(2, Math.round(H * S.scale)));
+  }
+
+  // --- move ------------------------------------------------------------
+  if (keys.has('KeyW')) cam.speed = Math.min(cam.speed + dt * 60, 240);
+  if (keys.has('KeyS')) cam.speed = Math.max(cam.speed - dt * 60, -60);
+  qaxis(_yq, [0, 1, 0], cam.yaw);
+  qaxis(_pq, [1, 0, 0], cam.pitch);
+  qmul(camQuat, _yq, _pq);
+  const fwd = qrot(v3(), camQuat, [0, 0, -1]);
+  cam.pos[0] += fwd[0] * cam.speed * dt;
+  cam.pos[1] += fwd[1] * cam.speed * dt;
+  cam.pos[2] += fwd[2] * cam.speed * dt;
+  if (cam.pos[2] < -2700) cam.pos[2] = 260;             // loop the run
+
+  for (const s of scene.ships) {
+    s.t += dt;
+    s.pos[0] += s.vel[0] * dt; s.pos[1] += s.vel[1] * dt; s.pos[2] += s.vel[2] * dt;
+    if (s.pos[2] > 120) s.pos[2] = -2600;
+    qlook(s.quat, s.vel);
+  }
+  for (const r of scene.rocks) {
+    qaxis(_pq, [0.3, 0.8, 0.5], r.spin * dt);
+    qmul(r.quat, _pq, r.quat); qnorm(r.quat);
+  }
+  qaxis(_pq, [0, 1, 0], scene.gate.spin * dt); qmul(scene.gate.quat, _pq, scene.gate.quat);
+  qaxis(_pq, [0, 1, 0], scene.station.spin * dt); qmul(scene.station.quat, _pq, scene.station.quat);
+
+  // a cutter at work: the one light that moves and that you can aim
+  cutT -= dt;
+  scene.beams.length = 0;
+  const cutter = scene.ships[3];
+  if (!scene.noBeam && (keys.has('Space') || cutT > 0 || (time % 7) < 2.2)) {
+    let best = null, bd = 1e9;
+    for (const r of scene.rocks) {
+      const d = Math.hypot(r.pos[0] - cutter.pos[0], r.pos[1] - cutter.pos[1], r.pos[2] - cutter.pos[2]);
+      if (d < bd && d > 60) { bd = d; best = r; }
+    }
+    if (best && bd < 420) {
+      scene.beams.push({
+        a: cutter.pos, b: best.pos, col: C.mining,
+        mid: [(cutter.pos[0] + best.pos[0]) / 2, (cutter.pos[1] + best.pos[1]) / 2, (cutter.pos[2] + best.pos[2]) / 2],
+      });
+    }
+  }
+
+  // --- build the frame --------------------------------------------------
+  batch.reset();
+  for (const r of scene.rocks) {
+    batch.mesh(r.shape, r.pos, r.quat, r.r, r.rich ? C.rich : C.rock, 1.5, 1, r.rich ? 1.5 : 1);
+  }
+  for (const s of scene.ships) batch.mesh(s.model, s.pos, s.quat, s.scale, s.col, 1.7, 1, 1.35);
+  batch.mesh(MODELS.gate, scene.gate.pos, scene.gate.quat, 3.4, C.station, 1.8, 1, 1.6);
+  batch.mesh(MODELS.station, scene.station.pos, scene.station.quat, 3.2, C.station, 1.8, 1, 1.4);
+  for (const b of scene.beams) batch.line3v(b.a, b.b, C.mining, 2.6, 1, 2.4);
+
+  const count = S.wireLights ? lightsFromWires(S.lcount) : lightsFromHulls(S.lcount);
+
+  m4perspective(proj, 74 * Math.PI / 180, W / H, 1, 20000);
+  m4view(view, cam.pos, camQuat);
+  m4mul(viewProj, proj, view);
+
+  // --- lines into the HDR target ---------------------------------------
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneRT.fbo);
+  gl.viewport(0, 0, W, H);
+  gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  gl.useProgram(lineProg.p);
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, batch.data.subarray(0, batch.count * 16), gl.DYNAMIC_DRAW);
+  gl.uniformMatrix4fv(lineProg.u.uViewProj, false, viewProj);
+  gl.uniform4f(lineProg.u.uRes, W, H, 1 / W, 1 / H);
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, batch.count);
+  gl.bindVertexArray(blank);
+
+  // --- the fog ----------------------------------------------------------
+  if (S.fog && count > 0) {
+    const right = qrot(v3(), camQuat, [1, 0, 0]);
+    const up = qrot(v3(), camQuat, [0, 1, 0]);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, volRT.fbo);
+    gl.viewport(0, 0, volRT.w, volRT.h);
+    gl.disable(gl.BLEND);
+    gl.useProgram(volProg.p);
+    gl.uniform3f(volProg.u.uCam, cam.pos[0], cam.pos[1], cam.pos[2]);
+    gl.uniform3f(volProg.u.uRight, right[0], right[1], right[2]);
+    gl.uniform3f(volProg.u.uUp, up[0], up[1], up[2]);
+    gl.uniform3f(volProg.u.uFwd, fwd[0], fwd[1], fwd[2]);
+    gl.uniform1f(volProg.u.uAspect, W / H);
+    gl.uniform1f(volProg.u.uTanH, Math.tan(74 * Math.PI / 360));
+    gl.uniform1f(volProg.u.uFar, FAR);
+    gl.uniform1f(volProg.u.uTime, time);
+    gl.uniform4fv(volProg.u.uLp, lp);
+    gl.uniform4fv(volProg.u.uLc, lc);
+    gl.uniform1i(volProg.u.uCount, count);
+    gl.uniform1i(volProg.u.uMode, S.mode);
+    gl.uniform1i(volProg.u.uSteps, S.steps | 0);
+    gl.uniform1f(volProg.u.uDensity, S.density);
+    gl.uniform1f(volProg.u.uGain, S.gain);
+    gl.uniform1f(volProg.u.uFalloff, S.falloff);
+    gl.uniform1f(volProg.u.uExt, S.ext);
+    gl.uniform1f(volProg.u.uNoiseAmt, S.namt);
+    gl.uniform1f(volProg.u.uNoiseScale, S.nscale);
+    gl.uniform1f(volProg.u.uNoiseSpeed, S.nspeed);
+    gl.uniform1f(volProg.u.uAmbient, S.namb);
+    gl.uniform3f(volProg.u.uNeb, S.neb[0], S.neb[1], S.neb[2]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sceneRT.fbo);
+    gl.viewport(0, 0, W, H);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(upProg.p);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, volRT.t);
+    gl.uniform1i(upProg.u.uSrc, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  gl.disable(gl.BLEND);
+
+  // --- bloom and composite, exactly as the game does it -----------------
+  const bind = (tex, unit, loc) => {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(loc, unit);
+  };
+  const blit = (prog, dst, setup) => {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fbo : null);
+    gl.viewport(0, 0, dst ? dst.w : W, dst ? dst.h : H);
+    gl.useProgram(prog.p);
+    setup();
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+  blit(brightProg, bt, () => {
+    bind(sceneRT.t, 0, brightProg.u.uSrc);
+    gl.uniform1f(brightProg.u.uThreshold, 0.42);
+  });
+  const blur = (src, dst, dx, dy, scale) => blit(blurProg, dst, () => {
+    bind(src.t, 0, blurProg.u.uSrc);
+    gl.uniform2f(blurProg.u.uTexel, 1 / src.w, 1 / src.h);
+    gl.uniform2f(blurProg.u.uDir, dx, dy);
+    gl.uniform1f(blurProg.u.uScale, scale);
+  });
+  blur(bt, b1[0], 1, 0, 1); blur(b1[0], b1[1], 0, 1, 1);
+  blur(b1[1], b2[0], 1, 0, 2); blur(b2[0], b2[1], 0, 1, 2);
+  blit(compProg, null, () => {
+    bind(sceneRT.t, 0, compProg.u.uScene);
+    bind(b1[1].t, 1, compProg.u.uBloom1);
+    bind(b2[1].t, 2, compProg.u.uBloom2);
+    gl.uniform2f(compProg.u.uTexel, 1 / W, 1 / H);
+    gl.uniform1f(compProg.u.uTime, time);
+    gl.uniform1f(compProg.u.uB1, 0.85);
+    gl.uniform1f(compProg.u.uB2, 0.60);
+    gl.uniform1f(compProg.u.uCrt, 1);
+  });
+
+  hud.innerHTML = `<b>${MODES[S.mode]}</b>${S.fog ? '' : ' · FOG OFF'}<br>`
+    + `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1e-3)).toFixed(1)} ms<br>`
+    + `${batch.count} segments · <b>${count}</b> lights<br>`
+    + `${S.wireLights ? 'lights from wires' : 'lights from hulls'} · ${Math.round(S.scale * 100)}% res`
+    + (S.mode === 1 ? `<br>${S.steps} steps · ${(S.steps * count / 1000).toFixed(0)}k evals/px` : '')
+    + (S.mode !== 1 ? `<br>falloff is exactly 1/r² here` : '');
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.NEBULA = { S, scene, sync, gl };
+</script>
+</body>
+</html>
